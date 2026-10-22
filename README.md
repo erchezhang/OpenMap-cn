@@ -5,7 +5,17 @@ OpenMap 简体中文汉化版，基于上游 **v0.7.2-beta**。
 OpenMap 把魔兽世界的所有区域拼接成一张无缝世界地图：从一个区域缩小即可进入下一个区域，暴雪的
 地图、任务日志和 Questie 照常工作。
 
-上游项目：<https://www.curseforge.com/wow/addons/openmap>
+## 上游项目
+
+| 用途 | 地址 |
+| --- | --- |
+| 发布页（CurseForge），取新版 | <https://www.curseforge.com/wow/addons/openmap> |
+| 原作者 GitHub 仓库 | <https://github.com/jiforever/wowforever-openmap> —— **已无法访问（404）** |
+| 非官方镜像（v0.4.0-beta 的最后公开状态） | <https://github.com/fitzforge/wowforever-openmap> |
+
+作者 `jiforever` 的 GitHub 账号与仓库都已下线，插件内的 `Map/News.lua` 也因此把官网指向 CurseForge
+而不是 GitHub。所以目前**没有可用的官方 GitHub 上游**：新版本请从 CurseForge 获取，历史代码可参考上面
+的镜像（它停在 v0.4.0-beta，不包含 0.7.x，也不接受维护）。若作者恢复仓库，以作者仓库为准。
 
 ## 本汉化版做了什么
 
@@ -30,9 +40,10 @@ OpenMap 把魔兽世界的所有区域拼接成一张无缝世界地图：从一
 
 ## 同步上游新版本
 
-汉化改动只集中在上面列出的 3 个文件（外加 `NameCN.lua`，上游已自带该文件但未加载）。升级时把新版
-文件覆盖进来，再按同样方式接入 `ns.CN()` 即可，其余文件应与上游保持一致。
+从 CurseForge 下载新版后，汉化改动只集中在上面列出的 3 个文件（外加 `NameCN.lua`，上游已自带该文件但未加载）。
+升级时把新版文件覆盖进来，再按同样方式接入 `ns.CN()` 即可，其余文件应与上游保持一致。
 
 ## 许可
 
-代码遵循上游的 MIT 许可（见 `LICENSE.txt`），地图美术资源版权归暴雪所有。
+代码遵循上游的 MIT 许可（见 `LICENSE.txt`），原作者为 jiforever 与 OpenMap contributors，地图美术资源
+版权归暴雪所有。
