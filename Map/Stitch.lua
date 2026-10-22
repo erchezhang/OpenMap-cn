@@ -155,8 +155,10 @@ end
 -- little before it (WARM, of FADE's start: their files load meanwhile) and the tiles fade off them; and
 -- while their files are still coming in (busy) the tiles stay (holding), or the zones' plain parchment,
 -- the first of their files to arrive, showed for a moment between the two
+-- desat: the tiles' own desaturation, the rest of the way from what they're baked at to the setting
+-- (desaturating twice is desaturating once by 1 - (1 - a)(1 - b)), so they serve any Take colour out
 local Baked = { FADE = { 1.2, 1.6 }, WARM = 0.85, tiles = {}, use = false, live = 1, warm = false, busy = false, holding = false,
-	path = TEX .. "MapZones\\" }
+	path = TEX .. "MapZones\\", desat = 0 }
 
 -- The live zone layers' regions (tilesRoot, overlayRoot, coreRoot: thousands of textures and their
 -- masks) are anchored only while they can show. Every region is placed on root, and each frame of a
@@ -1040,6 +1042,7 @@ local function BuildPins()
 		end
 	end
 	S.stats.pins = #pins
+	S.RefreshFound()
 
 	if S.BuildRoutes then S.BuildRoutes() end     -- Routes.lua
 end
@@ -2537,8 +2540,13 @@ function S.ApplyGrade(strength, desat, unexplored)
 	end
 	-- the baked art only at the settings it was baked at (unexplored areas hidden: live, piece by piece)
 	local art = ns.MapZoneArt
-	Baked.use = (art and Baked.frame and strength == art.colorMatch and math.abs(desat - art.desaturate) < 0.001
+	Baked.use = (art and Baked.frame and strength == art.colorMatch and desat >= art.desaturate - 0.001
 		and unexplored ~= "hide" and not Baked.noFills) and true or false
+	local bd = art and math.max(0, (desat - art.desaturate) / (1 - art.desaturate)) or 0
+	if Baked.use and math.abs(bd - Baked.desat) > 0.001 then
+		Baked.desat = bd
+		for _, t in ipairs(Baked.tiles) do if t.tex then t.tex:SetDesaturation(bd) end end
+	end
 	if root then
 		appliedDetail = nil
 		ApplyDetail()
@@ -2659,6 +2667,7 @@ function Baked.Cull()
 			t.tex = f:CreateTexture(nil, "ARTWORK")
 			t.tex:SetTexture(Baked.path .. t.name, nil, nil, "TRILINEAR")
 			t.tex:SetTexCoord(Baked.inset, 1 - Baked.inset, Baked.inset, 1 - Baked.inset)
+			t.tex:SetDesaturation(Baked.desat)
 			Record(t.tex, t.x, t.y, t.size, t.size)
 			t.shown = true
 		end
@@ -2903,4 +2912,44 @@ function S.RefreshExplored()
 	if cities.Refresh() then changed = true end
 	if changed then Shade.Places.Refresh() end
 	if changed and lastGrade then S.ApplyGrade(unpack(lastGrade)) end
+	if changed then S.RefreshFound() end
+end
+
+-- Only places you've found (the menu's): a dungeon's entrance, a dock or a zeppelin tower shown once
+-- you've explored the zone's land where it is (or a little round it: a dock stands in the water), as
+-- Blizzard's own map reveals it; one in no zone always (a player's request)
+function places.Found(u, v)
+	local chain = S.ChainAt(u, v)
+	local zone = chain[#chain]
+	if #chain < 3 then return true end
+	local l, r, t, b = S.Rect(zone)
+	if not l then return true end
+	local x, y = (u - l) / (r - l), (v - t) / (b - t)
+	local at = C_MapExplorationInfo and C_MapExplorationInfo.GetExploredAreaIDsAtPosition
+	if not at then return true end
+	for _, o in ipairs({ { 0, 0 }, { 0.015, 0 }, { -0.015, 0 }, { 0, 0.015 }, { 0, -0.015 } }) do
+		local ok, areas = pcall(at, zone, CreateVector2D(x + o[1], y + o[2]))
+		if ok and type(areas) == "table" and #areas > 0 then return true end
+	end
+	return false
+end
+
+function S.SetFoundOnly(on)
+	on = on and true or false
+	if places.foundOnly == on then return end
+	places.foundOnly = on
+	S.RefreshFound()
+end
+
+function S.RefreshFound()
+	for _, pin in ipairs(pins) do
+		if pin.u then
+			if places.foundOnly then
+				if pin.found == nil or not pin.found then pin.found = places.Found(pin.u, pin.v) end
+				pin:SetShown(pin.found)
+			else
+				pin:Show()
+			end
+		end
+	end
 end

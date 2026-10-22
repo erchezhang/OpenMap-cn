@@ -199,6 +199,7 @@ local function Rows()
 		optRow(L["Zeppelins"], "zeppelins", { atlas = "vehicle-air-horde", texture = "Interface\\Vehicles\\SeatIndicator\\Vehicle-HordeZeppelin", icon = true }),
 		optRow(L["Flight masters"], "flight", { atlas = faction == "Horde" and "TaxiNode_Horde" or "TaxiNode_Alliance",
 			texture = "Interface\\Icons\\Ability_Mount_Wyvern_01", icon = true }),
+		optRow(L["Only places you've found"], "foundOnly", Icon("INV_Misc_Spyglass_03")),
 		optRow(L["Boat and zeppelin routes"], "routes", { atlas = "Ships_CargoShip-Map", texture = "Interface\\Icons\\INV_Misc_Spyglass_02", icon = true }),
 		optRow(L["Your arrow"], "playerArrow", { texture = "Interface\\Minimap\\MinimapArrow" }),
 		optRow(L["Party and raid members"], "group", Icon("Spell_Holy_PrayerOfFortitude")),
@@ -234,15 +235,17 @@ local function Rows()
 			function() return db.entranceClick == "journal" end,
 			function(v) db.entranceClick = v and "journal" or "map" if ns.NotifyOptions then ns.NotifyOptions() end end)
 	end
-	-- (they all come from Questie's NPC database: without Questie, only the heading, saying so)
-	rows[#rows + 1] = { questie and L["Townsfolk"] or L["Townsfolk (needs Questie)"] }
+	-- (they all come from Questie's NPC database, or one like it another addon gives: without, only the
+	-- heading, saying so)
+	local folkDB = mod.HasTownsfolk and mod.HasTownsfolk()
+	rows[#rows + 1] = { folkDB and L["Townsfolk"] or L["Townsfolk (needs Questie)"] }
 	local kinds = {}
 	for _, k in ipairs(mod.TOWNSFOLK or {}) do kinds[k.key] = k end
 	local function folk(label, key)
 		return row(label, "townsfolk." .. key, kinds[key] and kinds[key].look or Icon("INV_Misc_QuestionMark"),
 			function() return db.townsfolk[key] end, function(v) db.townsfolk[key] = v mod:RefreshTownsfolk() end)
 	end
-	if questie then
+	if folkDB then
 		for _, k in ipairs(mod.TOWNSFOLK or {}) do
 			if not k.rare and k.key ~= "spirit" then rows[#rows + 1] = folk(k.name, k.key) end
 		end
@@ -888,7 +891,7 @@ Fill = function()
 	checks.boxes = checks.boxes or {}
 	for _, it in ipairs(checks.heads) do it:Hide() it.rule:Hide() end
 	-- (a row's icon, frame and label are the list's, not its box's: hidden with it, or another tab's show through)
-	for _, it in ipairs(checks.boxes) do it:Hide() it.hit:Hide() it.star:Hide() it.icon:Hide() it.border:Hide() it.label:Hide() end
+	for _, it in ipairs(checks.boxes) do it:Hide() it.hit:Hide() it.star:Hide() it.icon:Hide() it.border:Hide() it.label:Hide() it.note:Hide() end
 	local nh, nb, tallest = 0, 0, 0
 	for col = 1, 2 do
 		local y = 0
@@ -1461,6 +1464,26 @@ function mod:OpenMenu()
 		SetOpen(true)
 	end
 	return true
+end
+
+-- Key bindings (Bindings.xml, the game's Key Bindings > AddOns): an action of the menu's by its id,
+-- opening the map first if it's closed (a player's request: a key for Find me)
+-- (in a section of their own, each named OpenMap: ..., so the bindings' search finds them: in the AddOns
+-- section, under a header, they were hard to find, Tom)
+for key, text in pairs({ FIND = L["Find me"], PIN = L["Drop a pin"], PINS = L["Pins"], QUILL = L["Quill"],
+	QUESTLOG = L["Quest log"], MENU = L["The map's menu"] }) do
+	_G["BINDING_NAME_OPENMAP_" .. key] = "OpenMap: " .. text
+end
+function _G.OpenMap_Binding(id)
+	if not (mod.enabled and menu) then return end
+	if id == "menu" then mod:OpenMenu() return end
+	local run
+	for _, e in ipairs(Actions()) do if e.id == id then run = e.run end end
+	if not run then return end
+	if map:IsShown() then run("LeftButton") return end
+	if InCombatLockdown() then return end          -- (as the menu's own button: no opening the map in combat)
+	ToggleWorldMap()
+	C_Timer.After(0, function() if map:IsShown() then run("LeftButton") end end)
 end
 
 -- the menu's ticks and the favourites follow settings changed elsewhere

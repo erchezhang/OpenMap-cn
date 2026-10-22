@@ -16,7 +16,7 @@
 ## AddonCompartmentFunc: OpenMap_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: OpenMap_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: OpenMap_OnAddonCompartmentLeave
-## Version: v0.7.2-beta
+## Version: v0.7.3-beta
 ## SavedVariables: OpenMapDB
 ## SavedVariablesPerCharacter: OpenMapCharDB
 ## OptionalDeps: Questie, Leatrix_Maps, BetterMaps, HighFidelityWorldMap, HiddenMaps, Mapster, Magnify
