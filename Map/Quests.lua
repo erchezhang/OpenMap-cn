@@ -57,7 +57,7 @@ end
 
 -- a click: the quest tracked (as Blizzard's own quest icons do) and the view in on it, the map kept as it is,
 -- full screen or windowed. (It opened the quest's details, and Blizzard opens those in the windowed map
--- with its quest log: full screen was left, Tom.) With the quest log beside the map, its details there too
+-- with its quest log: full screen was left.) With the quest log beside the map, its details there too
 local ZOOM_TO = 6
 local function Click(pin)
 	local q = pin.data

@@ -50,7 +50,8 @@ local function SetIcon(tex, look)
 	if square then tex:SetTexCoord(0.08, 0.92, 0.08, 0.92) end   -- (the spell icons' own frame cut off)
 	return square and true or false
 end
-local OPENMAP_ICON = Icon("Achievement_Zone_EasternKingdoms_01")
+-- OpenMap's own icon (tools/icon/build.py), framed and trimmed as a spell icon is
+local OPENMAP_ICON = { texture = "Interface\\AddOns\\OpenMap\\Media\\Textures\\OpenMapIcon", icon = true }
 
 -- Blizzard's action-button frame round `tex` (`size` square): this client's, with its rounded
 -- mask on the icon, else the classic slot's
@@ -203,9 +204,12 @@ local function Rows()
 		optRow(L["Boat and zeppelin routes"], "routes", { atlas = "Ships_CargoShip-Map", texture = "Interface\\Icons\\INV_Misc_Spyglass_02", icon = true }),
 		optRow(L["Your arrow"], "playerArrow", { texture = "Interface\\Minimap\\MinimapArrow" }),
 		optRow(L["Party and raid members"], "group", Icon("Spell_Holy_PrayerOfFortitude")),
+		optRow(L["Friends and guild"], "friends", Icon("INV_Misc_GroupNeedMore")),
 		optRow(L["Your drawings"], "sketchShown", Icon("INV_Feather_04")),
-		optRow(L["Quests from every zone"], "allQuests", { atlas = "UI-QuestPoi-QuestNumber", texture = "Interface\\GossipFrame\\ActiveQuestIcon" }),
 	}
+	if mod.defaults.allQuests ~= nil then        -- (Quests.lua: WoW Forever's toc loads it, retail's doesn't)
+		rows[#rows + 1] = optRow(L["Quests from every zone"], "allQuests", { atlas = "UI-QuestPoi-QuestNumber", texture = "Interface\\GossipFrame\\ActiveQuestIcon" })
+	end
 	-- Questie's quest icons: its own "Enable Map Icons" setting, switched as its options do
 	if questie then
 		local function profile() return _G.Questie and Questie.db and Questie.db.profile end
@@ -236,16 +240,19 @@ local function Rows()
 			function(v) db.entranceClick = v and "journal" or "map" if ns.NotifyOptions then ns.NotifyOptions() end end)
 	end
 	-- (they all come from Questie's NPC database, or one like it another addon gives: without, only the
-	-- heading, saying so)
+	-- heading, saying so; a client may have none of it at all, retail: Client.lua)
+	local client = ns.ClientMaps or {}
 	local folkDB = mod.HasTownsfolk and mod.HasTownsfolk()
-	rows[#rows + 1] = { folkDB and L["Townsfolk"] or L["Townsfolk (needs Questie)"] }
+	if client.townsfolk ~= false then
+		rows[#rows + 1] = { folkDB and L["Townsfolk"] or L["Townsfolk (needs Questie)"] }
+	end
 	local kinds = {}
 	for _, k in ipairs(mod.TOWNSFOLK or {}) do kinds[k.key] = k end
 	local function folk(label, key)
 		return row(label, "townsfolk." .. key, kinds[key] and kinds[key].look or Icon("INV_Misc_QuestionMark"),
 			function() return db.townsfolk[key] end, function(v) db.townsfolk[key] = v mod:RefreshTownsfolk() end)
 	end
-	if folkDB then
+	if folkDB and client.townsfolk ~= false then
 		for _, k in ipairs(mod.TOWNSFOLK or {}) do
 			if not k.rare and k.key ~= "spirit" then rows[#rows + 1] = folk(k.name, k.key) end
 		end
@@ -253,17 +260,22 @@ local function Rows()
 		rows[#rows + 1] = folk(L["Rare mobs"], "rare")
 	end
 	-- the look
+	-- (darkened or hidden; neither ticked: shown as they are. Darkened takes the colour-matched zones' land
+	-- masks, which retail's data has none of: hidden only, there)
 	rows[#rows + 1] = { L["Unexplored areas"], tab = "look" }
-	-- (darkened or hidden; neither ticked: shown as they are)
 	for _, mode in ipairs({ { "dim", L["Darken unexplored areas"], "Spell_Shadow_Twilight" }, { "hide", L["Hide unexplored areas"], "Ability_Vanish" } }) do
-		rows[#rows + 1] = row(mode[2], "unexplored." .. mode[1], Icon(mode[3]), function() return mod.Unexplored() == mode[1] end,
-			function(v) mod.SetUnexplored(v and mode[1] or "show") end)
+		if mode[1] ~= "dim" or ns.MapGrade then   -- (darkening needs its zones' land masks: not retail's)
+			rows[#rows + 1] = row(mode[2], "unexplored." .. mode[1], Icon(mode[3]), function() return mod.Unexplored() == mode[1] end,
+				function(v) mod.SetUnexplored(v and mode[1] or "show") end)
+		end
 	end
 	-- (this character's own choice of the two, or every character's)
 	rows[#rows + 1] = row(L["Only for this character"], "unexploredOwn", Icon("INV_Misc_Head_Human_01"),
 		function() return mod.char and mod.char.unexploredOwn or false end, function(v) mod.SetUnexploredOwn(v) end)
 	rows[#rows + 1] = { L["The map"] }
-	rows[#rows + 1] = optRow(L["Responsive ocean & border"], "chart", Icon("INV_Misc_Map02"))
+	if ns.MapChart then                          -- (the sea chart is WoW Forever's: Data\Forever\Chart.lua)
+		rows[#rows + 1] = optRow(L["Responsive ocean & border"], "chart", Icon("INV_Misc_Map02"))
+	end
 	rows[#rows + 1] = optRow(L["Zone highlight on hover"], "hoverHighlight", Icon("Spell_Holy_MindVision"))
 	rows[#rows + 1] = optRow(L["Zone levels"], "zoneLevels", Icon("Spell_ChargePositive"))
 	rows[#rows + 1] = optRow(L["Coordinates"], "coords", Icon("INV_Misc_Spyglass_03"))
@@ -275,7 +287,7 @@ local function Rows()
 			mod:Refresh()
 			if ns.NotifyOptions then ns.NotifyOptions() end
 		end)
-	rows[#rows + 1] = row(L["Minimap button"], "minimapButton", Icon("Achievement_Zone_EasternKingdoms_01"), function() return db.minimapButton end,
+	rows[#rows + 1] = row(L["Minimap button"], "minimapButton", OPENMAP_ICON, function() return db.minimapButton end,
 		function(v)
 			db.minimapButton = v
 			if mod.RefreshLauncher then mod.RefreshLauncher() end
@@ -294,7 +306,9 @@ local function Rows()
 	rows[#rows + 1] = { L["Up close"] }
 	rows[#rows + 1] = optRow(L["Minimap detail"], "minimap", Icon("Spell_Nature_FarSight"))
 	rows[#rows + 1] = optRow(L["Minimap detail in major cities"], "cityMinimap", Icon("Spell_Arcane_TeleportStormWind"))
-	rows[#rows + 1] = optRow(L["Minimap in the gaps"], "gapMinimap", Icon("INV_Misc_Map_01"))
+	if ns.MapGaps then                           -- (a client with gaps between its zones)
+		rows[#rows + 1] = optRow(L["Minimap in the gaps"], "gapMinimap", Icon("INV_Misc_Map_01"))
+	end
 	rows[#rows + 1] = optRow(L["Soften and paper grain"], "soften", Icon("INV_Fabric_Linen_01"))
 	rows[#rows + 1] = optRow(L["Caves underground"], "underground", Icon("Trade_Mining"))
 	-- the rest
@@ -310,6 +324,8 @@ local function Rows()
 	end
 	rows[#rows + 1] = { L["Sharing"] }
 	fromOptions(L["Pins others share with you"], "pinsShared", Icon("INV_Misc_Map_01"))
+	rows[#rows + 1] = optRow(L["Share where you are"], "friendsShare", Icon("Ability_Hunter_EagleEye"))
+	rows[#rows].note = L["Your guild and friends see you"]   -- (a second line: what turning it on means)
 	rows[#rows + 1] = { L["Tools"] }
 	if mod.TogglePaint then
 		rows[#rows + 1] = row(L["Map notes"], "paint", Icon("INV_Misc_Note_02"), function() return mod:IsPainting() end,
@@ -973,6 +989,11 @@ Fill = function()
 		for _, r in ipairs(menu.extraRows or {}) do r:Fill() end
 	end
 	menu:SetHeight(checks.top + tallest + (look and (menu.sliders:GetHeight() + 10) or 0) + 30 + PAD)
+	-- shrunk to fit a short screen (a TV at a big UI scale: the Look tab ran off its foot, a player's report)
+	local room = UIParent:GetHeight() * UIParent:GetEffectiveScale() - 20
+	local need = menu:GetHeight() * menu:GetParent():GetEffectiveScale()
+	local fit = need > room and room / need or 1
+	if math.abs(menu:GetScale() - fit) > 0.001 then menu:SetScale(fit) end
 end
 
 -- the menu stays where it is on the screen while the map window is dragged about: where you put it,
@@ -1204,7 +1225,7 @@ function mod:SetupPanel(worldMap)
 	local border = map.BorderFrame
 	if border and border.SetPortraitToAsset then
 		local function Portrait()
-			border:SetPortraitToAsset(mod.IsStitched() and OPENMAP_ICON.texture or "Interface\\QuestFrame\\UI-QuestLog-BookIcon")
+			border:SetPortraitToAsset(mod.IsStitched() and "Interface\\AddOns\\OpenMap\\Media\\Textures\\OpenMapIconRound" or "Interface\\QuestFrame\\UI-QuestLog-BookIcon")
 		end
 		Portrait()
 		map:HookScript("OnShow", Portrait)
@@ -1470,7 +1491,7 @@ end
 -- Key bindings (Bindings.xml, the game's Key Bindings > AddOns): an action of the menu's by its id,
 -- opening the map first if it's closed (a player's request: a key for Find me)
 -- (in a section of their own, each named OpenMap: ..., so the bindings' search finds them: in the AddOns
--- section, under a header, they were hard to find, Tom)
+-- section, under a header, they were hard to find)
 for key, text in pairs({ FIND = L["Find me"], PIN = L["Drop a pin"], PINS = L["Pins"], QUILL = L["Quill"],
 	QUESTLOG = L["Quest log"], MENU = L["The map's menu"] }) do
 	_G["BINDING_NAME_OPENMAP_" .. key] = "OpenMap: " .. text
