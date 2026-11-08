@@ -159,8 +159,10 @@ end
 -- the first of their files to arrive, showed for a moment between the two
 -- desat: the tiles' own desaturation, the rest of the way from what they're baked at to the setting
 -- (desaturating twice is desaturating once by 1 - (1 - a)(1 - b)), so they serve any Take colour out
+-- english: the tiles are baked from the English client's files, names lettered on the art and all; any
+-- other language draws the zones live, from the client's own art in its language
 local Baked = { FADE = { 1.2, 1.6 }, WARM = 0.85, tiles = {}, use = false, live = 1, warm = false, busy = false, holding = false,
-	path = TEX .. "MapZones\\", desat = 0 }
+	path = TEX .. "MapZones\\", desat = 0, english = not GetLocale or GetLocale():sub(1, 2) == "en" }
 
 -- The live zone layers' regions (tilesRoot, overlayRoot, coreRoot: thousands of textures and their
 -- masks) are anchored only while they can show. Every region is placed on root, and each frame of a
@@ -716,6 +718,7 @@ end
 local function Anchor(u, v)
 	local a = tremove(anchorPool) or root:CreateTexture(nil, "BACKGROUND")
 	a:SetAlpha(0)
+	a:Hide()        -- (hidden, not only see-through: a shown one is laid out and drawn on every zoom frame)
 	local rec = { a, u, v, 0.01, 0.01 }
 	dynamic[a] = rec
 	PlaceRecord(rec)
@@ -1085,6 +1088,7 @@ LOOK.airship = LOOK.boat         -- (the flying boats to Zephras Isle: a boat's 
 -- continents off the stitched world a dock sails to: the map its icon opens instead of going there.
 -- Zephras Isle is its own continent (Map 2991), whose map is UiMap 2521 (UiMapAssignment)
 local AWAY_MAP = { [2991] = 2521 }
+S.AWAY_MAP = AWAY_MAP              -- (Dungeons.lua: the map opened while you stand on one)
 
 -- an instance's name in the player's language (the game's own), else the data's English. A wing
 -- (the group finder's name for part of a dungeon, "Dire Maul - East") keeps its own name in English,
@@ -1954,22 +1958,32 @@ local function BuildBlur(mapID)
 	ShowZone(mapID)
 end
 
--- amount 0..1; the view's world rectangle (normalized): zones in it get their copies
-function S.SetBlur(amount, u0, v0, u1, v1)
-	if not root then return end
+-- amount 0..1; the view's world rectangle (normalized): zones in it get their copies.
+-- most: turn on (or build) at most this many zones' copies this call, the rest left for the next
+-- (Close.lua brings the blur back a few zones a frame, not all in one frame); true once all are done
+function S.SetBlur(amount, u0, v0, u1, v1, most)
+	if not root then return true end
 	softNow = amount
+	local left = most or math.huge
+	local done = true
 	for _, mapID in ipairs(overlayZones) do
 		local l, r, t, b = S.Rect(mapID)
 		local inView = amount > 0.01 and l and r > u0 and l < u1 and b > v0 and t < v1
-		if inView and blurZones[mapID] == nil then BuildBlur(mapID) end
 		local frames = blurZones[mapID]
-		local shown = inView and true or false
-		if frames and frames.shown ~= shown then
-			frames.shown = shown
-			for _, f in ipairs(frames) do f:SetShown(shown) end
+		if inView and (frames == nil or (frames and not frames.shown)) and left <= 0 then
+			done = false
+		else
+			if inView and frames == nil then BuildBlur(mapID) frames = blurZones[mapID] end
+			local shown = inView and true or false
+			if frames and frames.shown ~= shown then
+				frames.shown = shown
+				for _, f in ipairs(frames) do f:SetShown(shown) end
+				if shown then left = left - 1 end
+			end
 		end
 	end
 	ApplyDetail()
+	return done
 end
 
 -- underground (Close.lua): as a cave surfaces, the world above goes out of focus. The
@@ -2115,8 +2129,10 @@ end
 -- view (or the map opening on one) doesn't stall a frame setting them all at once
 -- Each fades in as it gets its file (LOAD_FADE), not popping in (the file itself streams in
 -- over a few frames). A long queue (the map opening on a zone up close: a thousand and more) is
--- set over its frames at the most, not 40 a frame (in testing: two seconds for the detail to come in)
-local LOAD_PER_FRAME = { 40, frames = 6, most = 300 }   -- (one local: the file is at Lua's limit of 200)
+-- set over its frames at the most: 60, not 300 (a frame setting 300 files was a 35 ms hitch on
+-- a 240 Hz machine, each file set being a load and an upload, in testing: two seconds for the
+-- detail to come in, and a pan into new ground arriving over a few more frames)
+local LOAD_PER_FRAME = { 40, frames = 6, most = 60 }   -- (one local: the file is at Lua's limit of 200)
 local LOAD_FADE = 0.3           -- seconds
 local loadQueue, loadAt = {}, 1
 local fading, fadingN = {}, 0   -- texture -> when it got its file
@@ -2195,10 +2211,19 @@ function Shade.Tint(tex)
 	Shade.tinted[#Shade.tinted + 1] = tex
 	tex:SetColorTexture(UNDISCOVERED[1], UNDISCOVERED[2], UNDISCOVERED[3], UNDISCOVERED[4] * Shade.k)
 end
-function S.SetDarkening(k)
+-- color: the shade's colour ({ r, g, b }: Options' Darkening colour, #9), or nil for the game-like
+-- dark one; an unexplored piece's colour (DIM) follows it, as the shade at its alpha over white
+Shade.UNDISC0, Shade.DIM0 = { UNDISCOVERED[1], UNDISCOVERED[2], UNDISCOVERED[3] }, { Shade.DIM[1], Shade.DIM[2], Shade.DIM[3] }
+function S.SetDarkening(k, color)
 	k = math.max(0, math.min(1, tonumber(k) or 1))
-	if k == Shade.k then return end
-	Shade.k = k
+	local c = type(color) == "table" and tonumber(color[1]) and tonumber(color[2]) and tonumber(color[3]) and color or nil
+	local key = c and ("%.3f %.3f %.3f"):format(c[1], c[2], c[3]) or ""
+	if k == Shade.k and key == (Shade.colorKey or "") then return end
+	Shade.k, Shade.colorKey = k, key
+	for i = 1, 3 do
+		UNDISCOVERED[i] = c and math.max(0, math.min(1, c[i])) or Shade.UNDISC0[i]
+		Shade.DIM[i] = c and (1 - UNDISCOVERED[4]) + UNDISCOVERED[4] * UNDISCOVERED[i] or Shade.DIM0[i]
+	end
 	for i = 1, 3 do Shade.DIMK[i] = 1 - (1 - Shade.DIM[i]) * k end
 	Shade.DIMK[4] = Shade.DIM[4] * k
 	S.greyD = Shade.DIMK[4]
@@ -2740,10 +2765,11 @@ function S.ApplyGrade(strength, desat, unexplored)
 		cities.Dim()
 		cities.Banners()
 	end
-	-- the baked art only at the settings it was baked at (unexplored areas hidden: live, piece by piece)
+	-- the baked art only at the settings it was baked at (unexplored areas hidden: live, piece by piece),
+	-- and on an English client (Baked.english)
 	local art = ns.MapZoneArt
 	Baked.use = (art and Baked.frame and strength == art.colorMatch and desat >= art.desaturate - 0.001
-		and unexplored ~= "hide" and not Baked.noFills) and true or false
+		and unexplored ~= "hide" and not Baked.noFills and Baked.english) and true or false
 	local bd = art and math.max(0, (desat - art.desaturate) / (1 - art.desaturate)) or 0
 	if Baked.use and math.abs(bd - Baked.desat) > 0.001 then
 		Baked.desat = bd

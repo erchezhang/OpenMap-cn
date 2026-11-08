@@ -4,6 +4,28 @@
 local _, ns = ...
 
 ns.MapChangelog = {
+	{ version = "v0.8.2", date = "2026-11-08", heads = { [1] = "Improved", [2] = "Fixed", }, items = {
+		"|cff6e2c0aPanning no longer hitches|r: the map set up to 300 textures' files in a single frame where a pan brought new ground into view, and each set is a load and an upload, so that frame showed as a hitch of about 35 ms. It sets 60 a frame now; the art still fades in, a few frames later.",
+		"|cff6e2c0aThe map no longer stalls a moment after it opens|r: since 0.8.0 OpenMap keeps the map's art loaded while it's closed, then let go of it all in one frame a second into the opening, which the game unloaded at once (about a second's freeze). It now lets go of it a little at a time.",
+		"|cff6e2c0aZooming in notch by notch is smooth again|r: since 0.8.1 the blur came back all at once each time the map stopped, one long frame the next wheel notch landed on. It now waits out a pause between notches and comes back a few zones a frame. Questie's mob paths are worked out once the map stops, not on every frame of a zoom.",
+	} },
+	{ version = "v0.8.1", date = "2026-11-08", heads = { [1] = "New", [3] = "Improved", [7] = "Fixed", }, items = {
+		"|cff6e2c0aQuestie's mob paths on the stitched map|r, drawn over the art for the zones near the view as you zoom in (Questie's own were under the art, and only on the zone's own map).",
+		"|cff6e2c0aDarkening colour|r (Options, under Darkening): the colour unexplored areas are darkened with, picked with the game's colour picker; |cff6e2c0aDefault colour|r brings back the dark one.",
+		"|cff6e2c0aZooming is about four times smoother|r: OpenMap no longer lays out its hidden icons and its blur on every frame of a zoom (the blur comes back a moment after you stop). Found and measured by Peendars.",
+		"|cff6e2c0aFlight masters are easier to see on the map|r: bigger, with a dark outline, and the ones you haven't learned are no longer half see-through (they were lost on the parchment).",
+		"|cff6e2c0aCtrl-click drops a pin can be turned off|r (Options, and the menu's More tab): with Map Pin Enhanced a Ctrl-click dropped two pins, its own and OpenMap's. Off, the menu's Drop a pin still works.",
+		"|cff6e2c0aThe Drowned City's map is Santiago Reyes's updated version|r, which names more of its places (the Eternal Amphitheater and the Abyssal Dais).",
+		"|cff6e2c0aDungeon and cave maps show in every language|r: on the Latin American Spanish, Russian and Italian clients every dungeon map and Blizzard cave map was solid green squares, as the game doesn't have their art for those languages. OpenMap now brings that art itself. Found and first fixed by RADD95 (OpenMap TextureFix): with this version that addon isn't needed. (New textures: restart the game.)",
+		"|cff6e2c0aZone names in your client's language|r: on every client but English, the zones' prebuilt art lettered their English names over the map. Other languages now draw the zones from the client's own art (zooming is a little slower there, as with that art turned off).",
+		"|cff6e2c0aQuestie's icons show the first time you open the map|r: after a login they could be missing until the map was closed and opened again (Questie was still setting up when OpenMap looked).",
+		"|cff6e2c0aZygor's waypoint shows on the stitched map|r, in the right place and over the art (Zygor uses its own renamed copy of HereBeDragons, which OpenMap didn't know). Traced by robnoord.",
+		"|cff6e2c0aYour class's trainers are found on every language's client|r: on a French client (and the other non-English ones) every class trainer showed as a profession trainer.",
+		"|cff6e2c0aAn NPC who walks about shows once on the map|r: Girl with Puppies in Orgrimmar had a vendor icon at every point of her walk, dozens over the city. An NPC with many spawns in one zone (with Vendors and the other townsfolk on) now has one icon, in the middle of where it walks. Fixed by diegodiaz1256.",
+		"|cff6e2c0aThe map opened on Zephras Isle shows Zephras Isle|r, as its airship opens it: it showed the stitched world with no one on it.",
+		"|cff6e2c0aNo friends dot or badge for yourself|r: with Share where you are on, you could show on your own map as a guild member (the guild's roster can spell your realm differently).",
+		"|cff6e2c0aThe map opens at once inside a dungeon|r: each opening loaded the dungeon's map art again, a second or two (longer in dungeons with many floors, whose Floors tab shows every floor). OpenMap now keeps the art of the dungeon you're in loaded, as it does the world map's.",
+	} },
 	{ version = "v0.8.0-beta", date = "2026-11-07", heads = { [1] = "New", [3] = "Improved", [5] = "Fixed", }, items = {
 		"|cff6e2c0aFriends and guild on the map|r (Options: Friends and guild): your guild members and friends on your realm who are online show on the stitched map, a badge on the zone each is in with who's there. Those who use OpenMap and turn on |cff6e2c0aShare where you are|r show as a class-coloured dot where they stand, updated every few seconds while they move. The map asks once whether to share; it's off unless you say yes, goes only to your guild and your friends, and never from inside a dungeon, raid or battleground.",
 		"|cff6e2c0aMaps of The Drowned City, Krol'dok Stronghold and Shaper's Terrace|r, drawn by Santiago Reyes and used with his permission (credited on the map, as his other dungeon maps are).",
@@ -39,22 +61,5 @@ ns.MapChangelog = {
 		"|cff6e2c0aFull screen stays full screen|r, and the quest log you closed stays closed, the next time the map opens: it went back to the window and the quest log each time (a player's report).",
 		"|cff6e2c0aImproves performance|r under Fade icons while zooming no longer stays on show over the menu's other tabs (a player's report).",
 		"|cff6e2c0aRiverglades and Zephras Isle show their levels|r on the zone hover (35-45 and 1-12, from the Warcraft Wiki; a player's report).",
-	} },
-	{ version = "v0.7.2-beta", date = "2026-10-21", heads = { [1] = "Improved", [4] = "Fixed", }, items = {
-		"|cff6e2c0aZooming is smoother with unexplored areas darkened|r: greying the land you haven't found cost a lot of frame rate while zooming; it now costs far less.",
-		"|cff6e2c0aUnexplored areas for one character only|r: the menu's |cff6e2c0aOnly for this character|r, under Unexplored areas, gives this character its own choice (darkened, hidden or shown); every other character keeps the shared one (a player's request).",
-		"|cff6e2c0aFade icons while zooming|r says |cff6e2c0aImproves performance|r under it in the map's menu, so it isn't turned off unawares.",
-		"|cff6e2c0aThe map loads the zone you pan or zoom to again|r: with an addon adding map icons (Questie, GatherLite ...), it could stay on the zone you started on, so the zone or continent you'd panned to showed none of their icons until you clicked it (a player's report from 0.6, and ours). Its setting, once Follow the view, is now |cff6e2c0aLoad the zone in view|r (the menu's More tab), saying what it does.",
-		"|cff6e2c0aThe map window drags and resizes with Move Any installed but turned off|r: OpenMap asked whether Move Any was on for a character named by your first name alone (WoW Forever gives a first and last name), which the game took as on, and left the window to it (a player's report, with the fix).",
-	} },
-	{ version = "v0.7.1-beta", date = "2026-10-21", heads = { [1] = "Improved", [5] = "Fixed", }, items = {
-		"|cff6e2c0aDarkened unexplored areas look better|r (Unexplored areas: Darken): a |cff6e2c0aDarkening|r slider (the menu's sliders, and Options) sets how dark they are, from a light shade to the full one; unfound land is greyed as well as darkened, so the lighter lines Blizzard paints along zones' borders no longer show bright through it; neighbouring zones you haven't found blend into one another, with no light seams between them, and the painted land between zones (north of the Plaguelands, Gilneas, round Ahn'Qiraj ...) darkens with them.",
-		"|cff6e2c0aOther addons' icons fade while you zoom|r (Questie's, RestedXP's ...), out as a zoom starts and back in after it, instead of blinking off and on. |cff6e2c0aFade icons while zooming|r, in the map's menu (the Show tab), turns it off.",
-		"|cff6e2c0aThe map window can go partly off the screen|r: drag it up until its title and the bar under it are past the top, for just the map (Options' Reset window brings it back), or past the sides and bottom while some of it stays on.",
-		"|cff6e2c0aWith Enhance QoL|r, OpenMap says once in chat to turn off its Mover > World Map: the two both size the map, and its scale goes wrong (a player's finding).",
-		"|cff6e2c0aOther addons' icons stay on the map|r (RestedXP's, Nauticus's, Questie's ...): they could flicker and go, as anything that set the map's scale counted as zooming. Now only your own zooming does, and never for more than a moment.",
-		"|cff6e2c0aFlight masters you've learned are in colour|r, all of them: OpenMap knew only the ones it had seen you visit since it was installed (and, on a client not in English, none). It now asks the game which you've found.",
-		"|cff6e2c0aFishing on the zone hover|r shows: OpenMap looked for your Fishing skill in a way WoW Forever no longer offers, and found none.",
-		"|cff6e2c0aZeppelin towers show for the Alliance too|r when Zeppelins is on: they were the Horde's only, though their routes showed for everyone and the goblins' zeppelins take anyone.",
 	} },
 }
