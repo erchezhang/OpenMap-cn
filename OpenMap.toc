@@ -16,7 +16,7 @@
 ## AddonCompartmentFunc: OpenMap_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: OpenMap_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: OpenMap_OnAddonCompartmentLeave
-## Version: v0.8.2
+## Version: v0.8.3
 ## SavedVariables: OpenMapDB
 ## SavedVariablesPerCharacter: OpenMapCharDB
 ## OptionalDeps: Questie, Leatrix_Maps, BetterMaps, HighFidelityWorldMap, HiddenMaps, Mapster, Magnify
@@ -72,10 +72,10 @@ Data\Forever\ZoneArt.lua
 Data\Forever\Chart.lua
 Data\Forever\Changelog.lua
 
+# The map
 # Chinese display names for the data's own names (display lookups only)
 NameCN.lua
 
-# The map
 Map\Stitch.lua
 Map\Chart.lua
 Map\WorldMap.lua
