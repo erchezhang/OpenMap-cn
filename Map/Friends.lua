@@ -233,6 +233,8 @@ sender:SetScript("OnUpdate", function(self, elapsed)
 	local m = outbox[key]
 	outbox[key] = nil
 	wait = SEND_GAP
+	-- (your place never leaves with Share where you are off, whatever was queued before it was turned off: #277)
+	if m.text:sub(1, 2) == "L1" and not mod.db.friendsShare then return end
 	if m.bn then
 		if BNSendGameData then pcall(BNSendGameData, m.bn, PREFIX, m.text) end
 	elseif C_ChatInfo and C_ChatInfo.SendAddonMessage then
@@ -386,11 +388,26 @@ local function Scan()
 	dirty = true
 end
 
-local scanning = false
+-- map closed: roster events (raids, big guilds) coalesced into one scan per 30 s;
+-- opening the map scans at once if one is pending
+local scanning, scanToken = false, 0
 local function QueueScan()
 	if scanning then return end
 	scanning = true
-	C_Timer.After(1, function() scanning = false Timed("friends and guild scanned", Scan) end)
+	scanToken = scanToken + 1
+	local token = scanToken
+	local wait = (map and not map:IsShown()) and 30 or 1
+	C_Timer.After(wait, function()
+		if token ~= scanToken then return end
+		scanning = false
+		Timed("friends and guild scanned", Scan)
+	end)
+end
+local function ScanPendingNow()
+	if not scanning then return end
+	scanning = false
+	scanToken = scanToken + 1
+	QueueScan()
 end
 
 local function AskRosters()
@@ -434,7 +451,7 @@ local function Heard(full, text, guild, guid, sender)
 	if friends[full] then known[full] = true end
 	if kind == "H1" or kind == "H2" then
 		-- (a hello: answered with your place when you share it, so they know you use OpenMap either way)
-		if kind == "H1" and friends[full] then ToFriend(full, sharing and last.text or "H2") end
+		if kind == "H1" and friends[full] then ToFriend(full, sharing and mod.db.friendsShare and last.text or "H2") end
 		return
 	end
 	if not guild and not friends[full] then return end   -- (a whisper only from a friend)
@@ -709,6 +726,7 @@ function mod:SetupFriends(worldMap)
 		if dirty then redrawIn, stitched = REDRAW_EVERY, OnScreen() Timed("friends and guild drawn", Redraw) end
 	end)
 	worldMap:HookScript("OnShow", function()
+		ScanPendingNow()
 		wait, rosterIn, dirty = 0, 0, true
 		C_Timer.After(0.2, function() if worldMap:IsShown() then MaybeAsk(worldMap) end end)
 	end)

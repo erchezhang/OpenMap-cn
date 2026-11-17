@@ -87,7 +87,8 @@ end
 
 function mod:OnMapHidden()
 	local u, v, zoom = mod.ViewNow()
-	if u then saved = { u, v, zoom, Safe.Call(C_Map.GetBestMapForUnit, "player"), mod.HostMap() } end
+	-- (never a view that isn't one, NaN: reopened on, it left the map blank, #260)
+	if u and Safe.Finite(u, v, zoom) and zoom > 0 then saved = { u, v, zoom, Safe.Call(C_Map.GetBestMapForUnit, "player"), mod.HostMap() } end
 end
 
 -- the view to reopen on: restore the previous view when the selected condition holds,
@@ -100,7 +101,10 @@ function mod.SavedView(mapID, onlySaved)
 	local mode = mod.GetReopenView()
 	local zone = Safe.Call(C_Map.GetBestMapForUnit, "player")
 	local restore = saved and mode == "always"
-	if saved and mode == "visible" then
+	-- (nowhere to centre on, inside a dungeon: the view you left the map at, whatever the choice; the map
+	-- opened at Blizzard's whole continent there each time, the world you'd browsed lost)
+	if saved and not UnitWorld("player") then restore = true end
+	if saved and mode == "visible" and not restore then
 		local u, v = UnitWorld("player")
 		if not u then return end
 		local hu, hv = mod.ViewHalfExtents(saved[3])

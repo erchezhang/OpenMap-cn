@@ -29,9 +29,14 @@ local TURN_IN = { atlas = "UI-QuestPoi-QuestBangTurnIn", texture = "Interface\\G
 local OFFER = { atlas = "QuestNormal", texture = "Interface\\GossipFrame\\AvailableQuestIcon", size = 22 }
 local SAME = 0.002              -- world (normalized): one quest's icons this close are one
 local EVERY = 0.5               -- seconds: the quest log changes in bursts
+local READ_MS = 3               -- ms a frame spent reading the zones' quests (READ_MAPS: zones a frame, with no clock)
+local READ_MAPS = 3
 local NONE = {}
 local set, offerSet, map, maps, events
-local dirty = false
+local dirty = false             -- a refresh is wanted (Soon)
+local waiting = false           -- ... and on its timer
+local reading                   -- the zones being read: { list, at, found, seen, ids, ... } (RefreshQuests)
+local lastRead                  -- the last reading, for /openmap status: { zones, ms, frames, worst }
 
 -- the controller view is the map now (Blizzard's under it, unseen)
 local function PadView() return mod.PadViewOn and mod.PadViewOn() end
@@ -142,23 +147,111 @@ local function Offers(ids)
 	end
 end
 
-function mod:RefreshQuests()
-	dirty = false
-	if not set and S.IsBuilt() then set = S.PinSet("quests", 1, 5) end   -- (built as the map first opens)
-	if not set then return end
-	if not offerSet and S.IsBuilt() then offerSet = S.PinSet("questoffers", 1, 4) end   -- (under the quests' icons)
+-- Reading the zones' quests is a call into the game for every stitched zone and city (C_QuestLog.
+-- GetQuestsOnMap: dozens of them), and it all landed in one frame half a second after every opening of
+-- the map, again after each burst of quest log updates while it was open (and once more after it
+-- closed, if one was still waiting). So: the zones are read a few a frame (READ_MS), and the icons are
+-- put up together once every zone is in, those on the map staying until then; and nothing is read
+-- while the map is closed (it's read as it next opens). /openmap status says what the last reading cost.
+
+-- one zone's quests into the reading `r`
+local function ReadMap(r, mapID)
+	if mapID == r.host then return end
+	local have = G("HaveQuestData")
+	for _, q in ipairs(C_QuestLog.GetQuestsOnMap(mapID) or NONE) do
+		local id = q.questID
+		if id and q.x and q.y and not q.isMapIndicatorQuest and (not have or have(id))
+			and not (r.continent and id == r.tracked) then
+			local u, v = mod.ToWorld(mapID, q.x, q.y)
+			local key = u and (id .. ":" .. math.floor(u / SAME) .. ":" .. math.floor(v / SAME))
+			local onHost = u and r.hostQuests[id] and r.hl and u >= r.hl and u <= r.hr and v >= r.ht and v <= r.hb
+			if key and not r.seen[key] and not onHost then
+				r.seen[key] = true
+				r.ids[id] = true
+				r.found[#r.found + 1] = { u, v, id, C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) or false }
+			end
+		end
+	end
+end
+
+-- every zone read: the icons, all at once
+local function Draw(r)
 	if offerSet then
 		S.ClearPinSet(offerSet)
 		S.SetPinSetOn(offerSet, false)
 	end
 	S.ClearPinSet(set)
+	for _, f in ipairs(r.found) do
+		local pin = S.AddPin(set, f[1], f[2], BADGE, { id = f[3], complete = f[4] })
+		Mark(pin, f[4])
+		pin:SetScript("OnEnter", Enter)
+		pin:SetScript("OnLeave", GameTooltip_Hide)
+		pin.OnClick = Click
+	end
+	if r.pad then Offers(r.ids) end
+end
+
+local Soon
+local reader = CreateFrame("Frame")
+reader:Hide()
+reader:SetScript("OnUpdate", function(self)
+	local r = reading
+	if not r then self:Hide() return end
+	local list, n = r.list, 0
+	local t0 = debugprofilestop and debugprofilestop()
+	while r.at <= #list do
+		local mapID = list[r.at]
+		r.at, n = r.at + 1, n + 1
+		local ok, err = pcall(ReadMap, r, mapID)
+		if not ok then                               -- (a client difference: said once, the icons left as they are)
+			reading = nil
+			self:Hide()
+			geterrorhandler()(err)
+			return
+		end
+		if t0 and debugprofilestop() - t0 >= READ_MS or not t0 and n >= READ_MAPS then break end
+	end
+	r.frames = r.frames + 1
+	if t0 then
+		local ms = debugprofilestop() - t0
+		r.ms, r.worst = r.ms + ms, math.max(r.worst, ms)
+	end
+	if r.at <= #list then return end
+	reading = nil
+	self:Hide()
+	lastRead = { zones = #list, ms = r.ms, frames = r.frames, worst = r.worst }
+	Draw(r)
+	if dirty then Soon() end                        -- (the quest log changed while it was read: once more)
+end)
+
+-- for /openmap status: what the last reading of the zones' quests cost
+function mod.QuestsStatus()
+	if not lastRead then return "Quests from every zone: not read yet." end
+	return ("Quests from every zone: %d zones read in %.0f ms over %d frames (the longest %.1f ms)%s."):format(
+		lastRead.zones, lastRead.ms, lastRead.frames, lastRead.worst, reading and "; reading again now" or "")
+end
+
+function mod:RefreshQuests()
+	dirty = false
+	reading = nil                                   -- (one under way was for how things were)
+	reader:Hide()
+	if not set and S.IsBuilt() then set = S.PinSet("quests", 1, 5) end   -- (built as the map first opens)
+	if not set then return end
+	if not offerSet and S.IsBuilt() then offerSet = S.PinSet("questoffers", 1, 4) end   -- (under the quests' icons)
 	-- (and as Blizzard's own quests: not with the map's Quest Objectives off, its questPOI)
 	local pad = PadView()
 	local all = mod.db.allQuests ~= false
 	local on = (all or pad) and (mod.IsStitched() or pad) and C_QuestLog.GetQuestsOnMap ~= nil
 		and not (GetCVarBool and not GetCVarBool("questPOI"))
 	S.SetPinSetOn(set, on)
-	if not on then return end
+	if not on then                                  -- (off: gone at once)
+		if offerSet then
+			S.ClearPinSet(offerSet)
+			S.SetPinSetOn(offerSet, false)
+		end
+		S.ClearPinSet(set)
+		return
+	end
 	-- the controller view with "all quests" off: the zone (or city) Blizzard's map is on, whose quests
 	-- no pin of Blizzard's shows there
 	local list = Maps()
@@ -177,38 +270,22 @@ function mod:RefreshQuests()
 	end
 	local hl, hr, ht, hb
 	if host then hl, hr, ht, hb = S.Rect(host) end
-	local seen, ids = {}, {}
-	for _, mapID in ipairs(list) do
-		if mapID ~= host then
-			for _, q in ipairs(C_QuestLog.GetQuestsOnMap(mapID) or NONE) do
-				local id = q.questID
-				if id and q.x and q.y and not q.isMapIndicatorQuest and (not G("HaveQuestData") or G("HaveQuestData")(id))
-					and not (continent and id == tracked) then
-					local u, v = mod.ToWorld(mapID, q.x, q.y)
-					local key = u and (id .. ":" .. math.floor(u / SAME) .. ":" .. math.floor(v / SAME))
-					local onHost = u and hostQuests[id] and hl and u >= hl and u <= hr and v >= ht and v <= hb
-					if key and not seen[key] and not onHost then
-						seen[key] = true
-						local complete = C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) or false
-						ids[id] = true
-						local pin = S.AddPin(set, u, v, BADGE, { id = id, complete = complete })
-						Mark(pin, complete)
-						pin:SetScript("OnEnter", Enter)
-						pin:SetScript("OnLeave", GameTooltip_Hide)
-						pin.OnClick = Click
-					end
-				end
-			end
-		end
-	end
-	if pad then Offers(ids) end
+	-- (the zones read over the next frames, the icons put up once all are in: the reader, above)
+	reading = { list = list, at = 1, found = {}, seen = {}, ids = {}, pad = pad, host = host, hostQuests = hostQuests,
+		continent = continent, tracked = tracked, hl = hl, hr = hr, ht = ht, hb = hb, ms = 0, frames = 0, worst = 0 }
+	reader:Show()
 end
 
 -- (a burst of quest log updates: one refresh)
-local function Soon()
-	if dirty then return end
+Soon = function()
 	dirty = true
-	C_Timer.After(EVERY, function() if dirty then mod:RefreshQuests() end end)
+	if waiting then return end
+	waiting = true
+	C_Timer.After(EVERY, function()
+		waiting = false
+		-- (the map closed meanwhile: it's read as it next opens; a reading under way: again once it's done)
+		if dirty and not reading and map and map:IsShown() then mod:RefreshQuests() end
+	end)
 end
 
 function mod:SetupQuests(worldMap)
@@ -224,4 +301,12 @@ function mod:SetupQuests(worldMap)
 	end)
 	hooksecurefunc(map, "OnMapChanged", Soon)
 	map:HookScript("OnShow", Soon)
+	-- (closed while its zones were being read: left there, and read as the map next opens)
+	map:HookScript("OnHide", function()
+		if reading then
+			reading = nil
+			reader:Hide()
+			dirty = true
+		end
+	end)
 end

@@ -28,7 +28,7 @@ d.minimapMix = 0.45             -- how strong the minimap's detail is up close (
 d.minimapDeep = 0.85            -- the most it shows at any zoom (reached at the deepest, where the painted map has nothing left)
 d.minimapFrom = 20              -- the zoom where it starts to mix in (MINI_FROM: what it can be set to)
 d.cityMinimap = true            -- ... over the six major cities' own maps too (off: their own maps alone)
-d.soften = true                 -- soften + paper grain at the closest zoom
+d.soften = false                -- soften + paper grain zoomed in (its blur rests while the map moves)
 d.underground = true            -- caves and pre-instance areas
 d.gapMinimap = false            -- the minimap in land no zone map covers (experimental: off, that land is left as
                                 --  the zone maps' blank parchment, an unfinished map)
@@ -143,6 +143,7 @@ local function Tile(layer, fid, cont)
 		t.mask = mask
 	end
 	t[1]:SetTexture(fid, nil, nil, "LINEAR")
+	t.omA = nil                 -- (its alpha set again: UpdateMinimap skips an unchanged one)
 	return t
 end
 
@@ -178,6 +179,7 @@ local function LODPiece(layer, cont, sub)
 	local t = tremove(lodPool) or layer:CreateTexture(nil, "ARTWORK")
 	t:SetDrawLayer("ARTWORK", sub)
 	t:SetDesaturation(MINI_DESAT)
+	t.omA = nil                 -- (see Tile)
 	local mask = CONT_MAP[cont] and S.LandMask and S.LandMask(layer, CONT_MAP[cont])
 	if t.omMask ~= mask then
 		if t.omMask then t:RemoveMaskTexture(t.omMask) end
@@ -207,7 +209,7 @@ local function ShowLOD(layer, cont, level, per, keys, tx0, tx1, ty0, ty1, alpha)
 						t:Show()
 					end
 				end
-				if t then t:SetAlpha(alpha) end
+				if t and t.omA ~= alpha then t.omA = alpha t:SetAlpha(alpha) end
 			end
 		end
 	end
@@ -264,7 +266,7 @@ local function UpdateMinimap(layer, conts, u, v, hu, hv, mix)
 									tex:Show()
 								end
 							end
-							t[1]:SetAlpha(a3)
+							if t.omA ~= a3 then t.omA = a3 t[1]:SetAlpha(a3) end
 						end
 					end
 				end
@@ -799,6 +801,7 @@ function S.SetView(u, v, hu, hv, zoom, steps)
 	steps = steps or zoom
 	local L = S.closeLayers
 	if not L then return end
+	if not ns.Safe.Finite(u, v, hu, hv, zoom) then return end   -- (not a view: #261's NaN)
 	local cv = S.closeView
 	local start = debugprofilestop and debugprofilestop()
 	cv.zoom, cv.time, cv.updates = zoom, GetTime(), (cv.updates or 0) + 1
@@ -849,7 +852,14 @@ function S.SetView(u, v, hu, hv, zoom, steps)
 	local under = Try("underground", UpdateUnderground, L.under, cont, u, v, hu, hv, steps) or 0
 	-- the out-of-focus world above a cave gets heavier grain
 	Try("grain", UpdateGrain, L.grain, u, v, hu, hv, math.max(soft, math.min(1.4, under * 1.4)))
-	for i, fn in ipairs(S.viewHooks) do Try("view hook " .. i, fn, u, v, hu, hv, zoom) end
+	-- the hooks' names made once, not a new string each a frame
+	S.viewHookNames = S.viewHookNames or {}
+	local names = S.viewHookNames
+	for i, fn in ipairs(S.viewHooks) do
+		local step = names[i]
+		if not step then step = "view hook " .. i names[i] = step end
+		Try(step, fn, u, v, hu, hv, zoom)
+	end
 	local n = 0
 	for _ in pairs(tiles) do n = n + 1 end
 	cv.tiles = n
@@ -880,7 +890,7 @@ function mod:CloseOptions(opts, get, set, off)
 		hidden = function() return not ns.MapGaps end,   -- (a client with no gaps between its zones)
 		desc = ns.L["Land no zone map covers (west of Searing Gorge, Mount Hyjal ...) shows the game's minimap of it, tinted like the zones around it, instead of blank paper."] }
 	opts.soften = { type = "toggle", name = ns.L["Soften and add paper grain"], order = 52, get = get, set = set, disabled = off,
-		desc = ns.L["At the closest zoom the painted map runs out of pixels: soften it and lay paper grain over it."] }
+		desc = ns.L["Zoomed in, the painted map runs out of pixels: this softens it and lays paper grain over it. The softening rests while the map moves, so the map is sharp while you zoom or pan and softens a moment after it stops. Off (the default): always sharp."] }
 	opts.underground = { type = "toggle", name = ns.L["Caves and dungeon entrances"], order = 53, get = get, set = set, disabled = off,
 		desc = ns.L["Zoom right in on a cave, mine or crypt, or a dungeon's entrance area, and its map surfaces from underground: Blizzard's own where it drew one, else the game's minimap of it. Over one, the zoom goes on past the deepest zoom."] }
 end

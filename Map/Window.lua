@@ -29,6 +29,9 @@ local blizzardSize              -- the windowed map's own size, for a reset
 local ours = false              -- OpenMap is moving / sizing the window itself (not to be undone)
 local sizing = false            -- a grip is being dragged: the drag sizes the window, nothing puts it back
 local moveAny = false           -- Move Any owns position and scale, OpenMap owns viewport dimensions
+local classicMap = false        -- ClassicUI Forever's World map option owns the window (ClassicMapOn)
+local afterCombat = false       -- something here waited out combat: done as it ends
+local windowOwner = {}          -- (its event handler's key)
 
 -- At PLAYER_LOGIN, enabled addons have finished loading. An installed but disabled
 -- Move Any must not affect OpenMap's layout (GetAddOnEnableState can misreport it).
@@ -39,6 +42,44 @@ local function MoveAnyOn()
 	return ok and on and true or false
 end
 mod.MoveAnyOn = MoveAnyOn
+
+-- ClassicUI Forever's World map option lays the map window out itself, every frame: a corner or the
+-- title bar dragged was put straight back (the drag did nothing), and in combat it fades parts of the map.
+-- Asked once whether to turn that option off (a reload, as its own options do). Left on, the window is
+-- its: OpenMap's grips, title bar and saved place stand down. (Read through its own API)
+local function ClassicMapOn()
+	local api = _G.ClassicUIForeverAPI
+	if type(api) ~= "table" or type(api.IsOn) ~= "function" then return false end
+	local ok, on = pcall(api.IsOn, "worldMap")
+	return ok and on and true or false
+end
+
+local function AskClassicMap()
+	if InCombatLockdown() then afterCombat = true return end   -- (a reload waits out combat)
+	if mod.db.classicMapAsked or not StaticPopup_Show then return end
+	mod.db.classicMapAsked = true
+	StaticPopupDialogs.OPENMAP_CLASSICUI_MAP = {
+		text = L["ClassicUI Forever's World map option is on. It lays out the world map window itself, which is known to cause problems with OpenMap: the window can't be resized or moved, and in combat parts of the map can go missing.\n\nTurn that option off? Your interface will reload."],
+		button1 = YES or "Yes",
+		button2 = NO or "No",
+		OnAccept = function()
+			-- (asked again as combat ends)
+			if InCombatLockdown() then ns:Print(L["Not in combat."]) mod.db.classicMapAsked, afterCombat = false, true return end
+			-- (its saved setting, as its own World map checkbox writes it; it takes effect on the reload)
+			if type(_G.ForeverClassicUIDB) == "table" then _G.ForeverClassicUIDB.worldMap = false end
+			local reload = C_UI and C_UI.Reload or ReloadUI
+			if reload then reload() end
+		end,
+		OnCancel = function()
+			ns:Print(L["Kept as it is. You can turn it off any time in ClassicUI Forever's options (World map)."])
+		end,
+		timeout = 0,
+		whileDead = 1,
+		hideOnEscape = 1,
+		preferredIndex = 3,
+	}
+	StaticPopup_Show("OPENMAP_CLASSICUI_MAP")
+end
 
 local function Refit()
 	local sc = map.ScrollContainer
@@ -51,8 +92,22 @@ local function Maximized()
 	return map.IsMaximized and map:IsMaximized()
 end
 
+-- (in combat the map holds a protected pin, so placing, scaling or sizing it from here is refused, an
+-- "action blocked" each time: it's done as combat ends)
+local function Locked()
+	if InCombatLockdown() and map:IsProtected() then afterCombat = true return true end
+	return false
+end
+
 local function Apply()
-	if not map or Maximized() or ours or sizing then return end
+	if not map or Maximized() or ours or sizing or classicMap then return end
+	if Locked() then return end
+	-- (a place or size saved that isn't one, NaN or infinite, or no size at all: forgotten, or the map would
+	-- be put there every time it opens, blank: #260)
+	local w0, s0 = mod.db.window, mod.db.windowSize
+	if w0 and not ns.Safe.Finite(w0[3], w0[4]) then mod.db.window = false end
+	if s0 and not (ns.Safe.Finite(s0[1], s0[2]) and s0[1] >= 1 and s0[2] >= 1) then mod.db.windowSize = false end
+	if not ns.Safe.Finite(mod.db.windowScale) or mod.db.windowScale <= 0 then mod.db.windowScale = 1 end
 	ours = true
 	if not moveAny then
 		local w = mod.db.window
@@ -77,7 +132,8 @@ end
 -- maximized: Blizzard keeps the map art's shape (black bars at the sides on a wide
 -- screen); the stitched map is the whole world, so it takes the screen's full width
 FillScreen = function()
-	if not map or not Maximized() or InCombatLockdown() then return end
+	if not map or not Maximized() or classicMap then return end
+	if InCombatLockdown() then afterCombat = true return end
 	if not moveAny and math.abs((map:GetScale() or 1) - 1) > 0.001 then map:SetScale(1) end   -- (the windowed size is the window's)
 	if not mod.db.fullWidth then return end
 	local w = math.floor(UIParent:GetWidth())
@@ -146,7 +202,7 @@ local function Grip(corner)
 	end
 	local start
 	g:SetScript("OnMouseDown", function()
-		if Maximized() then return end
+		if Maximized() or Locked() then return end
 		local x, y = GetCursorPosition()
 		-- (where the window is, now: not known yet, or the drag would anchor it at 0, 0, bottom left: #241)
 		local l, r, t = map:GetLeft(), map:GetRight(), map:GetTop()
@@ -177,10 +233,12 @@ local function Grip(corner)
 	g:SetScript("OnUpdate", function()
 		if not start then return end
 		if not IsMouseButtonDown("LeftButton") then Finish() return end
+		if Locked() then Finish() return end   -- (combat began mid-drag: sized no further)
 		-- (another addon rescaled the map mid-drag: its place in the old scale's units no longer holds)
 		if math.abs(map:GetScale() - start.scale) > 0.001 then Finish() return end
 		local x, y = GetCursorPosition()
 		local s = map:GetEffectiveScale()
+		if not ns.Safe.Finite(s) or s <= 0 then return end   -- (no scale yet: a drag by it would be infinite)
 		local dx = (x - start.x) / s
 		local w = math.max(MIN_W, start.w + (left and -dx or dx))
 		local h = math.max(MIN_H, start.h - (y - start.y) / s)
@@ -207,6 +265,15 @@ end
 function mod:SetupWindow(worldMap)
 	map = worldMap
 	moveAny = MoveAnyOn()
+	classicMap = ClassicMapOn()
+	if classicMap then C_Timer.After(5, AskClassicMap) end   -- (once the login's own popups are up)
+	-- (what waited out combat: the window laid out again, the question asked)
+	ns.RegisterEvent(windowOwner, "PLAYER_REGEN_ENABLED", function()
+		if not afterCombat then return end
+		afterCombat = false
+		if map:IsShown() then if Maximized() then FillScreen() else Apply() end end
+		if classicMap then AskClassicMap() end
+	end)
 	-- Enhance QoL's Mover (World Map) sizes and places the map too, and the two fight over its scale (a
 	-- player's report). Its setting can't be read from here, so with Enhance QoL on it's said once
 	local loaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
@@ -228,7 +295,10 @@ function mod:SetupWindow(worldMap)
 	end
 	grip = {}
 	-- With Move Any, leave position, scale and title bar to it; resizing is set up below.
-	if not moveAny then
+	-- With ClassicUI Forever's World map, the whole window is its (ClassicMapOn)
+	if classicMap then
+		if not Maximized() then blizzardSize = { map:GetWidth(), map:GetHeight() } end
+	elseif not moveAny then
 		map:SetClampedToScreen(true)
 		-- partly off the screen: sideways and down while some of it stays on, never up (its title bar is
 		-- what moves it; /openmap reset or the Look tab's Reset size and place bring it back)
@@ -251,11 +321,15 @@ function mod:SetupWindow(worldMap)
 		handle:EnableMouse(true)
 		handle:RegisterForDrag("LeftButton")
 		handle:SetScript("OnDragStart", function()
-			if Maximized() then return end
+			-- (in combat the map's protected: moving it from here is refused)
+			if Maximized() or (InCombatLockdown() and map:IsProtected()) then return end
+			handle.moving = true
 			map:SetMovable(true)
 			map:StartMoving()
 		end)
 		handle:SetScript("OnDragStop", function()
+			if not handle.moving then return end
+			handle.moving = nil
 			map:StopMovingOrSizing()
 			map:SetUserPlaced(false)            -- (ours to remember, not the layout cache's)
 			Save()
@@ -290,6 +364,8 @@ function mod:SetupWindow(worldMap)
 		handle:HookScript("OnHide", function()
 			if not dragging then return end
 			dragging = false
+			if not handle.moving then return end
+			handle.moving = nil
 			map:StopMovingOrSizing()
 			map:SetUserPlaced(false)
 			Save()
@@ -308,7 +384,7 @@ function mod:SetupWindow(worldMap)
 		end
 	end
 	-- Both clients use the same corner grips; only their resize anchoring differs.
-	grip = { Grip("BOTTOMRIGHT"), Grip("BOTTOMLEFT") }
+	if not classicMap then grip = { Grip("BOTTOMRIGHT"), Grip("BOTTOMLEFT") } end
 	local function Mode()
 		local max = Maximized()
 		mod.ChatOverMap()

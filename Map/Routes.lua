@@ -164,7 +164,11 @@ local function ApplyLevels()
 	for _, route in ipairs(routes) do
 		for level = 1, LEVELS do
 			local px = STEP / 2 ^ (level - 1) / pu
-			route.levels[level]:SetAlpha(level == 1 and 1 or Smooth(px, SHOW_PX))
+			local a = level == 1 and 1 or Smooth(px, SHOW_PX)
+			-- a level faded out is hidden too: at alpha 0 its dots (the finest has
+			-- eight times the sparsest's) were still drawn and laid out on every frame of a zoom
+			route.levels[level]:SetAlpha(a)
+			route.levels[level]:SetShown(a > 0.003)
 		end
 	end
 end

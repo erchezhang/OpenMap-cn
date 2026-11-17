@@ -17,7 +17,9 @@ mod.defaults.flightTimes = {}   -- "from|to" -> seconds, measured (account-wide)
 
 local SPEED = 30                -- yards a second (classic flights, roughly)
 local ROUTE_COLOR = { 0.95, 0.78, 0.35 }
-local KNOWN_ATLAS = { "TaxiNode_Alliance", "TaxiNode_Horde" }
+-- a flight master: green as the game's own flight map shows one you can fly to (greyed: not learned). The
+-- faction's own icon was red for the Horde, which read as not learned (players' reports)
+local NODE_LOOK = { atlas = "Taxi_Frame_Green", texture = "Interface\\TaxiFrame\\UI-Taxi-Icon-Green" }
 
 local nodeAt = {}               -- node id -> { u, v } on the world (normalized)
 local edges = {}                -- node id -> { { to, path }, ... }
@@ -61,10 +63,14 @@ local function ReadFound()
 	for id in pairs(seen) do found[id] = true end
 end
 
+-- Once this character has opened a flight master's map, the paths it listed as learned are what count:
+-- the game's own "found" (ReadFound) showed a new character the flight masters another character of the
+-- account had learned (#274), and a learned one could read as not found (#301). Before that, the game's
 local function Known(id)
-	if found[id] then return true end
 	local n = F.nodes[id]
-	return n and mod.char.flightsKnown and mod.char.flightsKnown[n[1]]
+	local learned = mod.char.flightsKnown
+	if learned and next(learned) then return n and learned[n[1]] and true or false end
+	return found[id] and true or false
 end
 
 -- learned ones in their colour, the rest grey; both a size up from the map's other icons and outlined
@@ -303,7 +309,7 @@ function mod:BuildFlights()
 			local u, v = S.FromYards(n[2], n[3], n[4])
 			if u then
 				nodeAt[id] = { u, v }
-				local look = { atlas = KNOWN_ATLAS[factionBit], size = SIZE_KNOWN }
+				local look = { atlas = NODE_LOOK.atlas, texture = NODE_LOOK.texture, size = SIZE_KNOWN }
 				local pin = S.AddPin(set, u, v, look)
 				pin.node = id
 				-- (a dark outline: the boot again, in black, a little bigger, under it)

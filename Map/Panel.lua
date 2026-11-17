@@ -248,6 +248,7 @@ local function Rows()
 	rows[#rows].note = L["Improves performance"]      -- (a second line, so nobody turns it off unaware)
 	rows[#rows + 1] = { L["Dungeons"] }
 	rows[#rows + 1] = row(L["Dungeon maps"], "dungeonMaps", Icon("INV_Misc_Map_01"), mod.DungeonMapsOn, mod.SetDungeonMaps)
+	rows[#rows + 1] = optRow(L["Dungeon maps inside dungeons"], "dungeonInside", Icon("INV_Misc_Key_13"))
 	rows[#rows + 1] = optRow(L["Level ranges"], "dungeonLevels", Icon("Spell_ChargePositive"))
 	rows[#rows + 1] = optRow(L["Dungeon bosses"], "dungeonBosses", Icon("INV_Misc_Bone_ElfSkull_01"))
 	-- (with Questie, Dungeon Journal or NeedRoll: where they come from is in Options)
