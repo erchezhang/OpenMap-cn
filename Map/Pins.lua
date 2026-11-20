@@ -236,9 +236,19 @@ end
 
 local SHARE_TO = { group = L["your group"], guild = L["your guild"] }
 
+local versionSent = {}          -- channel (and whisper target) -> true: this copy's version sent there this session
+
 local function Share(pins, to)
 	local channel, target = Channel(to)
 	if not channel or not (C_ChatInfo and C_ChatInfo.SendAddonMessage) or #pins == 0 then return end
+	-- ("V1 version client" first, once a session to your group or guild: News.lua; v0.8.10 and before pass over it)
+	local version, client
+	if mod.VersionFields then version, client = mod.VersionFields() end   -- (not `a and f()`: it keeps one)
+	local where = channel .. "\t" .. (target or "")
+	if version and channel ~= "WHISPER" and not versionSent[where] then
+		versionSent[where] = true
+		queue[#queue + 1] = { ("V1\t%s\t%s"):format(version, client), channel, target }
+	end
 	for _, p in ipairs(pins) do queue[#queue + 1] = { Message(p), channel, target } end
 	sender:Show()
 	ns:Print(L["Sharing %d map pin(s) with %s (players with OpenMap are asked whether to add them)."], #pins,
@@ -338,12 +348,16 @@ waiter:SetScript("OnUpdate", function(self)
 end)
 
 local function OnAddonMessage(_, _, prefix, text, channel, from)
-	if prefix ~= PREFIX or not mod.db.pinsShared then return end
+	if prefix ~= PREFIX then return end
 	if Safe.IsSecret(text) or Safe.IsSecret(from) or type(text) ~= "string" or type(from) ~= "string" then return end
 	local name = Ambiguate(from, "none")
 	if name == UnitName("player") then return end   -- (your own, sent to your group or guild)
 	local kind, m, x, y, color, note = strsplit("\t", text, 6)
-	if kind ~= "P1" then return end
+	if kind == "V1" then
+		if channel ~= "WHISPER" and mod.HeardVersion then mod.HeardVersion(m, x) end   -- (a group's or guild's only)
+		return
+	end
+	if kind ~= "P1" or not mod.db.pinsShared then return end
 	local q = Valid(m, x, y, color, note or "")
 	if not q then return end
 	-- (sent to your party or raid, so from someone in it: added without asking, with pinsGroupAdd)

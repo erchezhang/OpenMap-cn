@@ -342,6 +342,19 @@ local function AreaLabelOnUpdate(self)
 	self:EvaluateLabels()
 end
 
+-- for PadView.lua, which has no Blizzard label over it: the label for the place at (x, y) on map `id`
+-- (normalized), as AreaLabelOnUpdate gives it. `whole`: the map is zoomed out past it, so the zone's own
+-- name and levels, as over a zone that isn't the map's; else the area there, as on the map's own zone
+function mod.PlaceLabel(id, x, y, whole)
+	if not id or id == S.WORLD then return end
+	if not whole and x and x >= 0 and x <= 1 and y >= 0 and y <= 1 and MapUtil and MapUtil.FindBestAreaNameAtMouse then
+		local area = MapUtil.FindBestAreaNameAtMouse(id, x, y)
+		if area then return area, FishingText(id) end
+	end
+	local name = MapName(id)
+	if name then return name .. LevelText(id), FishingText(id) end
+end
+
 local function SetUpZoneLevels()
 	if not labelProvider then
 		for provider in pairs(map.dataProviders or {}) do

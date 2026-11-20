@@ -11,6 +11,7 @@ local mod = ns:GetModule("worldmap")
 local Look, L = ns.Look, ns.L
 
 mod.defaults.newsSeen = false   -- the newest notes' version the window has shown (false: a fresh install)
+mod.defaults.updateNotice = true   -- a line in chat when a friend, guild or group member has a newer OpenMap
 
 local frame
 local W, H = 900, 620
@@ -307,9 +308,10 @@ local function Build()
 	close:SetPoint("BOTTOMRIGHT", -14, FOOT - 34)
 	local credit = Look:Font(frame:CreateFontString(nil, "OVERLAY"), 13)
 	credit:SetPoint("BOTTOMLEFT", 16, 16)
-	credit:SetText(L["OpenMap is made by |cffe6b85cJi|r, and it's open source: join in on GitHub"])
+	credit:SetText(L["OpenMap is made by |cffe6b85cJi Unit (RP-PvP Horde)|r, and it's open source: join in on GitHub"])
 	local link = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-	link:SetSize(300, 22)
+	-- (the address beside it in what's left of the width: a long line in some languages; it scrolls in a narrower box)
+	link:SetSize(math.max(160, math.min(300, W - 46 - (credit:GetStringWidth() or 0))), 22)
 	link:SetPoint("LEFT", credit, "RIGHT", 14, 0)
 	link:SetAutoFocus(false)
 	link:SetText(URL)
@@ -338,6 +340,42 @@ function mod:ToggleNews(on)
 	frame:SetShown(on)
 end
 function mod.NewsShown() return frame and frame:IsShown() or false end
+
+--------------------------------------------------------------------------------
+-- A newer OpenMap out: the version rides on messages OpenMap already sends (Friends.lua's hellos,
+-- Pins.lua's shares, as "V1 version client" or fields after the hello's own), and the first newer
+-- release seen says so in chat, once a session. Releases only (v1.2.3): test builds, betas and
+-- anything else are ignored; each client's against its own (Forever's never told of retail's).
+--------------------------------------------------------------------------------
+
+local told = false
+
+-- a release's numbers, from "v1.2.3" exactly; with mine, a suffix ("-test") is the release it leads to
+local function Release(v, mine)
+	if type(v) ~= "string" then return end
+	local a, b, c = v:match(mine and "^v(%d%d?%d?)%.(%d%d?%d?)%.(%d%d?%d?)" or "^v(%d%d?%d?)%.(%d%d?%d?)%.(%d%d?%d?)$")
+	if a then return tonumber(a), tonumber(b), tonumber(c) end
+end
+mod.Release = Release
+
+-- this copy's version and client, as the messages carry them; nil with the notice off
+function mod.VersionFields()
+	if not mod.db.updateNotice then return end
+	return ns.version, ns.Client
+end
+
+-- a version heard from someone: told once a session when it's a newer release for this client
+function mod.HeardVersion(version, client)
+	if told or not mod.db.updateNotice or client ~= ns.Client then return end
+	local a, b, c = Release(version)
+	local x, y, z = Release(ns.version, true)
+	if not a or not x then return end
+	if a > x + 1 then return end                 -- (a jump that far: a mistake or made up)
+	if a > x or (a == x and (b > y or (b == y and c > z))) then
+		told = true
+		ns:Print(L["OpenMap %s is out (you have %s). Update through CurseForge."], version, ns.version)
+	end
+end
 
 function mod:SetupNews()
 	local newest = Newest()

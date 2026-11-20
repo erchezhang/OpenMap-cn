@@ -26,6 +26,7 @@ mod.defaults.allQuests = true   -- the quests in your log from every zone (off: 
 local BADGE = { atlas = "UI-QuestPoi-QuestNumber", texture = "Interface\\GossipFrame\\ActiveQuestIcon", size = 22 }
 local IN_PROGRESS = { atlas = "Quest-In-Progress-Icon-yellow", texture = "Interface\\GossipFrame\\IncompleteQuestIcon" }
 local TURN_IN = { atlas = "UI-QuestPoi-QuestBangTurnIn", texture = "Interface\\GossipFrame\\ActiveQuestIcon" }
+local FOCUSED = { atlas = "UI-QuestPoi-QuestNumber-SuperTracked", texture = "Interface\\GossipFrame\\ActiveQuestIcon", size = 22 }
 local OFFER = { atlas = "QuestNormal", texture = "Interface\\GossipFrame\\AvailableQuestIcon", size = 22 }
 local SAME = 0.002              -- world (normalized): one quest's icons this close are one
 local EVERY = 0.5               -- seconds: the quest log changes in bursts
@@ -57,6 +58,10 @@ local function Enter(pin)
 	if not q then return end
 	GameTooltip:SetOwner(pin, "ANCHOR_RIGHT")
 	local title = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(q.id)
+	-- (its level and difficulty colour, "[39+] ", as Blizzard's own quest pins show it: their
+	-- QuestPinMixin:OnMouseEnter, WoW Forever's DifficultyUtil)
+	local decorate = G("SetQuestTitleLevelAndDifficultyColor")
+	if title and decorate then title = decorate(q.id, title) end
 	GameTooltip:SetText(title or "?", 1, 0.82, 0)
 	local index = C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetLogIndexForQuestID(q.id)
 	if q.complete then
@@ -70,6 +75,48 @@ local function Enter(pin)
 	GameTooltip:AddLine((PadView() or (map and map.IsMaximized and map:IsMaximized())) and L["Click: track this quest and zoom to it"]
 		or L["Click: track this quest, zoom to it and show it in the quest log"], 0.6, 0.6, 0.6)
 	GameTooltip:Show()
+	-- (the controller view: the quest's area, as Blizzard's map shows it for its own icons: PadView.lua)
+	if PadView() and mod.PadQuestArea then mod.PadQuestArea(q.id, q.map) end
+end
+
+local function Leave()
+	GameTooltip_Hide()
+	if mod.PadQuestArea then mod.PadQuestArea(nil) end
+end
+
+-- The controller view: the focused (super-tracked) quest's icon in Blizzard's look for it (gold), and
+-- its area shown while no other quest is hovered (PadView.lua), as Blizzard's map shows its own. (The
+-- usual map has Blizzard's own icons and areas for this: left as it is)
+local focusTint                 -- (a client without the gold atlas: the badge tinted gold instead)
+local drawn = {}                -- the quests' icons up now (Draw)
+local focusedPin                -- the one of them in the focused look (Focus)
+-- one icon in a look: the badge, or the focused quest's gold one
+local function Style(pin, on)
+	local look = on and FOCUSED or BADGE
+	pin.look = look
+	S.Look(pin.Icon, look)
+	S.Look(pin.Highlight, look)
+	if on and focusTint then pin.Icon:SetVertexColor(1, 0.82, 0) else pin.Icon:SetVertexColor(1, 1, 1) end
+end
+
+local function Focus()
+	if not set or not PadView() then return end
+	if focusTint == nil then
+		focusTint = not (C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(FOCUSED.atlas))
+	end
+	local tracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
+	local found
+	if tracked then
+		for _, pin in ipairs(drawn) do
+			if pin.data and pin.data.id == tracked then found = pin break end
+		end
+	end
+	if found ~= focusedPin then
+		if focusedPin then Style(focusedPin, false) end
+		if found then Style(found, true) end
+		focusedPin = found
+	end
+	if mod.PadQuestFocus then mod.PadQuestFocus(found and tracked or nil, found and found.data.map or nil) end
 end
 
 -- a quest you can start: its name, and the quest line it begins (the game's own words)
@@ -96,6 +143,7 @@ local function Click(pin)
 		end
 		C_SuperTrack.SetSuperTrackedQuestID(q.id)
 	end
+	Focus()                                         -- (at once: the redraw the event asks for comes later)
 	if S.GlideToWorld then S.GlideToWorld(pin.u, pin.v, ZOOM_TO) end
 	-- (the controller view: Blizzard's quest log is left as it is, as a dungeon's map is: its details
 	-- would set the pad's buttons from OpenMap's code)
@@ -168,7 +216,7 @@ local function ReadMap(r, mapID)
 			if key and not r.seen[key] and not onHost then
 				r.seen[key] = true
 				r.ids[id] = true
-				r.found[#r.found + 1] = { u, v, id, C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) or false }
+				r.found[#r.found + 1] = { u, v, id, C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) or false, mapID }
 			end
 		end
 	end
@@ -180,14 +228,18 @@ local function Draw(r)
 		S.ClearPinSet(offerSet)
 		S.SetPinSetOn(offerSet, false)
 	end
+	if focusedPin then Style(focusedPin, false) focusedPin = nil end   -- (its tint: AddPin keeps it)
 	S.ClearPinSet(set)
+	wipe(drawn)
 	for _, f in ipairs(r.found) do
-		local pin = S.AddPin(set, f[1], f[2], BADGE, { id = f[3], complete = f[4] })
+		local pin = S.AddPin(set, f[1], f[2], BADGE, { id = f[3], complete = f[4], map = f[5] })
 		Mark(pin, f[4])
 		pin:SetScript("OnEnter", Enter)
-		pin:SetScript("OnLeave", GameTooltip_Hide)
+		pin:SetScript("OnLeave", Leave)
 		pin.OnClick = Click
+		drawn[#drawn + 1] = pin
 	end
+	Focus()
 	if r.pad then Offers(r.ids) end
 end
 
@@ -249,7 +301,10 @@ function mod:RefreshQuests()
 			S.ClearPinSet(offerSet)
 			S.SetPinSetOn(offerSet, false)
 		end
+		if focusedPin then Style(focusedPin, false) focusedPin = nil end
 		S.ClearPinSet(set)
+		wipe(drawn)
+		if mod.PadQuestFocus then mod.PadQuestFocus(nil) end   -- (no icons: no focused quest's area either)
 		return
 	end
 	-- the controller view with "all quests" off: the zone (or city) Blizzard's map is on, whose quests

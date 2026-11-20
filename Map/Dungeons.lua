@@ -385,6 +385,30 @@ local function BuildView()
 		GameTooltip:Show()
 	end)
 	view.back:SetScript("OnLeave", GameTooltip_Hide)
+	-- inside the dungeon itself: the game's own map instead, one click away (Dungeon maps inside dungeons
+	-- off, as the menu's row does; players looked for that switch, #371). Only OpenMap's frames: fine in combat
+	view.gameMap = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+	view.gameMap:SetHeight(24)
+	view.gameMap:SetPoint("RIGHT", view.back, "LEFT", -6, 0)
+	view.gameMap:SetText(L["The game's map"])
+	view.gameMap:SetWidth((view.gameMap:GetFontString():GetStringWidth() or 90) + 28)
+	view.gameMap:SetScript("OnClick", function()
+		mod.db.dungeonInside = false
+		ns:Print(L["OpenMap's dungeon maps are off inside dungeons. To turn them back on: OpenMap's menu > Dungeons > Dungeon maps inside dungeons."])
+		Sound("IG_QUEST_LOG_CLOSE")
+		view:Hide()                                 -- (the game's map of where you are, under it)
+		RefreshCard()
+		if ns.NotifyOptions then ns.NotifyOptions() end
+		if mod.RefreshPanel then mod:RefreshPanel() end
+	end)
+	view.gameMap:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+		GameTooltip:AddLine(L["The game's map"], 1, 1, 1)
+		GameTooltip:AddLine(L["Inside dungeons, open the game's own map instead of OpenMap's dungeon map. Turn it back on any time: OpenMap's menu > Dungeons > Dungeon maps inside dungeons."], 0.8, 0.8, 0.8, true)
+		GameTooltip:Show()
+	end)
+	view.gameMap:SetScript("OnLeave", GameTooltip_Hide)
+	view.gameMap:Hide()
 	view.where = Look:Font(bar:CreateFontString(nil, "OVERLAY"), 12)
 	view.where:SetPoint("LEFT", 12, 0)
 	view.where:SetTextColor(0.8, 0.7, 0.5)
@@ -1112,6 +1136,12 @@ function mod.PlaceDungeonTabs()
 	end
 end
 
+-- whether you're inside that very dungeon (its map's "The game's map" button, #371)
+function mod.InsideThisDungeon(inst)
+	if not inst or not inst[1] or inst[1] == 0 or not (IsInInstance and IsInInstance()) then return false end
+	return select(8, GetInstanceInfo()) == inst[1]
+end
+
 -- a dungeon's map in the view: its wing's first floor, else its first; grown out of `pin` (the entrance)
 local function OpenView(inst, pin)
 	local t0 = debugprofilestop and debugprofilestop()
@@ -1142,6 +1172,8 @@ local function OpenView(inst, pin)
 	local info = zone and zone[#zone] and C_Map.GetMapInfo(zone[#zone])
 	view.back:SetText("|cffffd100<|r  " .. (info and info.name and L["Back to %s"]:format(info.name) or L["Back"]))
 	view.back:SetWidth((view.back:GetFontString():GetStringWidth() or 80) + 28)
+	-- (the game's own map instead: only inside this very dungeon, and not on the controller view)
+	view.gameMap:SetShown(mod.InsideThisDungeon(inst) and not PadView())
 	view.leaving = nil
 	view:SetAlpha(1)
 	view:Show()
