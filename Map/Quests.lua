@@ -40,7 +40,8 @@ local reading                   -- the zones being read: { list, at, found, seen
 local lastRead                  -- the last reading, for /openmap status: { zones, ms, frames, worst }
 
 -- the controller view is the map now (Blizzard's under it, unseen)
-local function PadView() return mod.PadViewOn and mod.PadViewOn() end
+-- (and the own view in a fight, OwnView.lua: Blizzard's quest pins under it, unseen)
+local function PadView() return (mod.PadViewOn and mod.PadViewOn()) or (mod.OwnViewOn and mod.OwnViewOn()) end
 
 -- the maps the quests are read from: the stitched zones and cities (a city's quests are its zone's
 -- too, at the same place: one icon, SAME)
@@ -314,8 +315,9 @@ function mod:RefreshQuests()
 		local zone = map and map.GetMapID and map:GetMapID()
 		list = zone and S.Rect(zone) and { zone } or NONE
 	end
-	-- the map underneath: Blizzard draws its quests (a continent, only the super-tracked one)
-	local host = mod.HostMap()
+	-- the map underneath: Blizzard draws its quests (a continent, only the super-tracked one). Not under the
+	-- controller view, nor the own view in a fight: its pins are there unseen, so its quests are OpenMap's too
+	local host = not pad and mod.HostMap() or nil
 	local hostInfo = host and C_Map.GetMapInfo(host)
 	local continent = hostInfo and hostInfo.mapType == Enum.UIMapType.Continent
 	local tracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()

@@ -361,6 +361,9 @@ mod.Release = Release
 -- this copy's version and client, as the messages carry them; nil with the notice off
 function mod.VersionFields()
 	if not mod.db.updateNotice then return end
+	-- (a release's only: a test build, a beta or a checkout says nothing of itself, so no one hears of a
+	-- version before it's out. Others' copies pass over those anyway, Release's exact match)
+	if not Release(ns.version) then return end
 	return ns.version, ns.Client
 end
 

@@ -19,6 +19,7 @@ local Look, Safe, L = ns.Look, ns.Safe, ns.L
 mod.defaults.pins = { list = {}, nextId = 1 }
 mod.defaults.pinsShared = true  -- pins others share reach you (you're asked first)
 mod.defaults.pinsAt = false     -- the Pins list's place once dragged: { point, relPoint, x, y } (UIParent's)
+mod.defaults.rightClickOut = true -- right-click on the map zooms out (off: the map's and other addons', Questie's)
 mod.defaults.ctrlClickPin = true -- Ctrl-click on the map drops a pin (off: another addon's Ctrl-click, Map Pin Enhanced's)
 mod.defaults.pinsHidden = false -- your pins off the map (right-click Pins; the list still has them)
 mod.defaults.pinsFollowNew = true -- a pin you drop is followed (off: Blizzard's waypoint, and the routes other addons draw to
@@ -839,6 +840,8 @@ function mod:PinOptions(opts, get, set_, off)
 		desc = L["A pin you drop goes to your party or raid once its card is closed (those with OpenMap are asked whether to add it)."] }
 	opts.pinsGroupAdd = { type = "toggle", name = L["Auto-add group's pins"], order = 36.2, width = "full", get = get, set = set_, disabled = off,
 		desc = L["Map pins your party or raid shares with you are added at once, without asking."] }
+	opts.rightClickOut = { type = "toggle", name = L["Right-click zooms out"], order = 35.95, width = "full", get = get, set = set_, disabled = off,
+		desc = L["Right-click on the map steps out to the zone or continent around it. Off, right-click is left to the map and other addons (Questie's objectives); the menu's way out still works."] }
 	opts.ctrlClickPin = { type = "toggle", name = L["Ctrl-click drops a pin"], order = 35.9, width = "full", get = get, set = set_, disabled = off,
 		desc = L["Ctrl-click on the map drops a pin. Turn it off if another addon drops its own pin on Ctrl-click (Map Pin Enhanced): the menu's Drop a pin still works."] }
 end

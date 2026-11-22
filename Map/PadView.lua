@@ -251,11 +251,8 @@ local function Step(inward)
 end
 
 local function UpdatePlayer()
-	local best = C_Map.GetBestMapForUnit("player")
-	local pos = best and S.Rect(best) and C_Map.GetPlayerMapPosition(best, "player")
-	local x, y
-	if pos then x, y = ns.Safe.XY(pos) end
-	if ns.Safe.IsSecret(x) or ns.Safe.IsSecret(y) or not (x and y) then S.SetPlayer(nil) return end
+	local best, x, y = ns.Safe.PlayerPos()
+	if not (best and S.Rect(best) and x and y) then S.SetPlayer(nil) return end
 	local l, r, t, b = S.Rect(best)
 	S.SetPlayer(l + x * (r - l), t + y * (b - t), ns.Safe.Call(GetPlayerFacing))
 end
@@ -374,48 +371,84 @@ end
 -- the frames out: drawn from the last one, after a zoom, the area was drawn for the zoom before it and
 -- stayed there (WorldMap.lua's SetView does the same for Blizzard's)
 function DrawArea(f, questID)
-	canvas:GetRect()
+	f:GetParent():GetRect()
 	f:GetRect()
 	pcall(f.DrawNone, f)
 	return pcall(f.DrawBlob, f, questID, true)
 end
 
-local function ShowArea()
-	local f = area.frame
-	local questID, mapID = area.hoverQ, area.hoverM
-	if not questID then questID, mapID = area.focusQ, area.focusM end
-	if not (questID and mapID and built and On() and view:IsShown() and S.Rect(mapID)) then
-		if f then
-			pcall(f.DrawNone, f)
-			f:Hide()
-		end
-		area.quest, area.map = nil, nil
-		return
+-- In a fight the map is OpenMap's own view (OwnView.lua), Blizzard's area under it, see-through: the same
+-- area drawn there, on that view's canvas (area.own), as on this one's
+local function AreaFrame(parent, level)
+	local ok, made = pcall(CreateFrame, "QuestPOIFrame", nil, parent)
+	if not ok or not made or not made.DrawBlob then return end
+	-- (Blizzard's look for them: QuestBlobDataProvider's)
+	pcall(made.SetFillTexture, made, "Interface\\WorldMap\\UI-QuestBlob-Inside")
+	pcall(made.SetBorderTexture, made, "Interface\\WorldMap\\UI-QuestBlob-Outside")
+	pcall(made.SetFillAlpha, made, 128)
+	pcall(made.SetBorderAlpha, made, 192)
+	pcall(made.SetBorderScalar, made, 1.0)
+	made:SetFrameLevel(level)
+	return made
+end
+
+local function HideArea(slot)
+	local f = slot.frame
+	if f then
+		pcall(f.DrawNone, f)
+		f:Hide()
 	end
+	slot.quest, slot.map = nil, nil
+end
+
+-- one area: `slot` (area, or area.own), on `cv` (the canvas it's drawn on) placed from `anchor` (the world's
+-- top left, in the art's units), at `level`
+local function ShowAreaOn(slot, cv, anchor, level, questID, mapID)
+	local f = slot.frame
 	if not f then
 		if area.failed then return end
-		local ok, made = pcall(CreateFrame, "QuestPOIFrame", nil, canvas)
-		if not ok or not made or not made.DrawBlob then area.failed = true return end
-		f = made
-		-- (Blizzard's look for them: QuestBlobDataProvider's)
-		pcall(f.SetFillTexture, f, "Interface\\WorldMap\\UI-QuestBlob-Inside")
-		pcall(f.SetBorderTexture, f, "Interface\\WorldMap\\UI-QuestBlob-Outside")
-		pcall(f.SetFillAlpha, f, 128)
-		pcall(f.SetBorderAlpha, f, 192)
-		pcall(f.SetBorderScalar, f, 1.0)
-		f:SetFrameLevel((S.artTop or canvas:GetFrameLevel() + ART_RANGE) + 1)
-		area.frame = f
+		f = AreaFrame(cv, level)
+		if not f then area.failed = true return end
+		slot.frame = f
 	end
-	if area.quest == questID and area.map == mapID and f:IsShown() then return end
+	f:SetFrameLevel(level)
+	if slot.quest == questID and slot.map == mapID and f:IsShown() then return end
 	local W, H = S.Size()
 	local l, r, t, b = S.Rect(mapID)
 	f:ClearAllPoints()
-	f:SetPoint("TOPLEFT", canvas, "TOPLEFT", l * W, -t * H)   -- (canvas units, as the art's)
+	f:SetPoint("TOPLEFT", anchor, "TOPLEFT", l * W, -t * H)   -- (canvas units, as the art's)
 	f:SetSize((r - l) * W, (b - t) * H)
 	if f.SetMapID then pcall(f.SetMapID, f, mapID) end
 	f:Show()
 	if not DrawArea(f, questID) then f:Hide() return end
-	area.quest, area.map = questID, mapID
+	slot.quest, slot.map = questID, mapID
+end
+
+local function ShowArea()
+	area.own = area.own or {}
+	local questID, mapID = area.hoverQ, area.hoverM
+	if not questID then questID, mapID = area.focusQ, area.focusM end
+	local known = questID and mapID and S.Rect(mapID)
+	if known and built and On() and view:IsShown() then
+		ShowAreaOn(area, canvas, canvas, (S.artTop or canvas:GetFrameLevel() + ART_RANGE) + 1, questID, mapID)
+	else
+		HideArea(area)
+	end
+	local own, iconLevel
+	if mod.OwnCanvas then own, _, iconLevel = mod.OwnCanvas() end
+	local root = own and S.Roots()
+	if known and own and root then
+		-- (over the art, which is lifted on that view, and under OpenMap's icons there)
+		ShowAreaOn(area.own, own, root, math.max(1, iconLevel - 1), questID, mapID)
+	else
+		HideArea(area.own)
+	end
+end
+
+-- for OwnView.lua: the area drawn again for the view's new place (as Apply does here)
+function mod.OwnQuestAreaMoved()
+	local slot = area.own
+	if slot and slot.quest and slot.frame and slot.frame:IsShown() then DrawArea(slot.frame, slot.quest) end
 end
 
 -- for Quests.lua: the quest under the pad's cursor (nil: none) ...
@@ -735,6 +768,7 @@ end
 local function Look()
 	local db = mod.db
 	S.SetPlayerHidden(db.playerArrow == false)
+	if S.SetPlayerScale then S.SetPlayerScale(db.playerArrowScale or 1) end
 	S.SetPlacesFrom(db.iconsFrom)
 	S.SetFoundOnly(db.foundOnly)
 	S.SetIconScale(db.iconScale or 1)
@@ -863,13 +897,10 @@ end
 -- the view to open on: where it was, else around you, your zone filling it
 local function FirstView()
 	UpdatePlayer()
-	local best = C_Map.GetBestMapForUnit("player")
+	local best, x, y = ns.Safe.PlayerPos()
 	local l, r, t, b
 	if best then l, r, t, b = S.Rect(best) end
-	local pos = best and C_Map.GetPlayerMapPosition(best, "player")
-	local x, y
-	if pos then x, y = ns.Safe.XY(pos) end
-	if l and x and y and not ns.Safe.IsSecret(x) and not ns.Safe.IsSecret(y) then
+	if l and x and y then
 		u, v = l + x * (r - l), t + y * (b - t)
 		local zone = best
 		while zone and not Stitchable(zone) do

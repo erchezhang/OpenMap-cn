@@ -4,6 +4,32 @@
 local _, ns = ...
 
 ns.MapChangelog = {
+	{ version = "v0.8.12", date = "2026-11-21", heads = { [1] = "New", [2] = "Improved", [10] = "Fixed", }, items = {
+		"|cff6e2c0aShow places to explore|r (the map's menu and Options, off until turned on): for each zone's Explore achievement, the places you haven't explored yet, each with a soft gold outline of the ground that explores it (read from the game's own terrain) and a pin where to go; its tooltip names the place and the achievement's progress. Further out, each zone shows how many places it has left.",
+		"|cff6e2c0aThe map works in a fight|r: since v0.8.11 the map stood still in combat (the game's map can't be moved by an addon then without breaking the quest tracker, #345). In a fight OpenMap's map now moves onto frames of its own, over the game's, which is left as it is: zoom, drag, click and resize it as usual, with your arrow, your party and raid, your quests and their areas, the name of the place under the cursor, Questie's and other addons' map icons, and Ctrl-click's waypoint. As the fight ends it all goes back on the game's map, where you left it (#386, #389). (New files: restart the game after updating, a /reload isn't enough.)",
+		"|cff6e2c0aUnexplored land darkens as one, the same at every zoom|r (Unexplored areas: Darken): in a zone you've been to, the unexplored parts were darker where the game's map pieces overlap, a different shade once the minimap's detail came in, and could jump between the two as you zoomed. Each piece's share of the darkening is now worked out ahead of time so that, whichever pieces you've explored, the rest come to one even shade, drawn over the map and the minimap alike (#317). By wealdly.",
+		"|cff6e2c0aGerman reads better|r: missing German texts filled in and others reworded, in the game's own terms. By gOOvER.",
+		"|cff6e2c0aRight-click can be left to other addons|r: Options' \"Right-click zooms out\" (on, as before) turned off leaves right-click on the map to the map and other addons, such as Questie's objectives (#117).",
+		"|cff6e2c0aColour matching says what it costs|r: below 100% the ready-made zone tiles aren't used, and its description now says so (#29).",
+		"|cff6e2c0aThe map's art ready before it opens|r: the art round you is read in while the map is closed, a few files a frame and out of combat, once the map is built after a login or a /reload and again when you reach a new zone. At a session's first opening, and after travelling, it used to come in over a moment (the files held from the last opening were another place's, or none). The part of the view still fading in as you closed the map is held too. By cscoder69.",
+		"|cff6e2c0aThe game's map-pin button works on the stitched map|r: armed, a click on the map drops your pin there, as on the game's own map (#324). By gOOvER.",
+		"|cff6e2c0aYour arrow, bigger if you like|r: Options' \"Arrow size\" (100% as before) and \"Your arrow over everything\", which lifts OpenMap's arrow over every icon on the map (#329). By gOOvER.",
+		"|cff6e2c0aNo stutter when the map opens|r: since v0.8.11 every set of icons was laid out twice as the map opened, for the whole world and then for your view; once now, as in v0.8.10 (#293, measured by protella: the opening 384 ms to 45).",
+		"|cff6e2c0aA resized window keeps its view|r: since v0.8.11 dragging the window's corner zoomed the map out to the whole continent; the place you were looking at stays put now, at the same scale.",
+		"|cff6e2c0aYour position read safely everywhere|r: the map, dungeon entrances, flight routes and the controller view all read where you are the same careful way, so a hidden position in combat or in a restricted instance can't raise a Lua error. By gOOvER.",
+		"|cff6e2c0aA dungeon's map fills the screen when maximized|r: going from the quest log (L) to the maximized map (M) inside a dungeon left its map small in the middle (#297). By gOOvER.",
+		"|cff6e2c0aThe Stockade's entrance opens its map|r: clicking it found neither the game's dungeon map nor its Dungeon Journal page (#289). By gOOvER.",
+		"|cff6e2c0aA map window saved off the screen comes back|r: dragged out of reach, it opens where Blizzard puts it again (/openmap reset does the same at any time) (#375).",
+		"|cff6e2c0aNo Lua error from the cursor's coordinates|r over a part of the map with no zone of its own, as on retail's maps outside the stitched world (#343).",
+		"|cff6e2c0aExplored land keeps its detail up close with Hide unexplored areas|r: zoomed in where the minimap's detail comes in, land you'd explored near an unexplored part (Redridge, Tarren Mill and others) got the painted map back over it, as if unexplored. Only the unexplored parts' own shapes are hidden now (#166, #156, #163, #247, #279, #370).",
+		"|cff6e2c0aAppear Offline keeps your place to yourself|r: with Battle.net's Appear Offline on, OpenMap sends your friends and guild nothing (not your place, not even a hello), and tells them to stop showing where you were (#395).",
+		"|cff6e2c0aQuestie's quest icons over a town's icons|r: a quest under a vendor, trainer or flight master's icon was hidden; Questie's quests now go over every icon of OpenMap's (#393).",
+		"|cff6e2c0aNo \"newer OpenMap\" notice from test builds|r: a test build or a beta no longer tells others it's a newer version; only releases do.",
+		"|cff6e2c0aThe windowed quest log sits beside the map|r: it covered part of the map until the window was laid out again; and a window resized by its corner stays on the screen (#327). By gOOvER.",
+		"|cff6e2c0aThe right wing's map in Dire Maul, Scarlet Monastery and Blackrock Spire|r: the wing is worked out from the dungeon finder and the area you're in, or the portal you came through, and kept over a /reload; Dungeon Journal is told it too. By puschie286.",
+		"|cff6e2c0aCtrl-click left to the game is followed|r: with \"Ctrl-click drops a pin\" off, the game's own waypoint was set on the map underneath (often the continent's), where the game has no route to it, so it was never followed; it's put on the zone under the cursor now, at the cursor, and followed (#19).",
+		"|cff6e2c0aCoordinates clear of the border full screen|r: the labels sat under Blizzard's border at the map's bottom edge when the map was maximized (#399).",
+	} },
 	{ version = "v0.8.11", date = "2026-11-20", heads = { [1] = "Improved", [4] = "Fixed", [15] = "Also", }, items = {
 		"|cff6e2c0aTold when a newer OpenMap is out|r: when a friend, guild member or group member has a newer release, a line in chat says so, once a session (\"OpenMap X is out (you have Y). Update through CurseForge.\"). Your version rides only on messages OpenMap already sends them (the hello to friends who use it, your first shared place to your guild, a pin share to your group); older copies pass over it. Options' \"Say when OpenMap has an update\" turns it off, and then your version isn't sent either.",
 		"|cff6e2c0a\"The game's map\" on a dungeon's map|r: inside a dungeon, a button at the top of OpenMap's dungeon map switches to the game's own map there, and says how to turn OpenMap's back on (menu > Dungeons) (#371).",
@@ -75,9 +101,5 @@ ns.MapChangelog = {
 	} },
 	{ version = "v0.8.7", date = "2026-11-12", heads = { [1] = "Fixed", }, items = {
 		"|cff6e2c0aQuestie's icons show on the first map you open|r: with Questie 12.8, a map opened on a zone showed none of Questie's icons (their tooltips still came up) until you'd zoomed out to the continent once: icons Questie placed before the map was first opened stayed under its art (#194, #193, #195).",
-	} },
-	{ version = "v0.8.6", date = "2026-11-12", heads = { [1] = "Improved", [2] = "Fixed", }, items = {
-		"|cff6e2c0aIcons stay shown while zooming|r: \"Fade icons while zooming\" is now off for everyone, as zooming is smooth enough with them shown; turn it on again in the menu's On the map tab if you prefer it.",
-		"|cff6e2c0aQuestie's icons show again with Questie 12.8|r: Questie 12.8 brings its map icons a new way (its own module, with a new name), which OpenMap didn't know, so they were left off the map; and each icon Questie drew again sank under the map's art, so they faded away one by one. Older Questie versions work as before (#18). With bv101rj. Questie 12.8 hides its objective icons (mobs to kill, items to loot) until you turn them on: /questie, Icon Options, Objectives.",
 	} },
 }

@@ -223,6 +223,29 @@ end
 -- Sending: one message a SEND_GAP, one waiting for each place it goes (a newer one replaces it)
 --------------------------------------------------------------------------------
 
+-- Battle.net's Appear Offline on: your friends are told you're offline, so nothing of OpenMap's tells them
+-- otherwise, your place least of all (#395). Read from your own account's info (C_BattleNet), checked a
+-- few times a minute at most; false where the client can't say
+local appearOffline = { at = -math.huge, on = false }
+local function AppearOffline()
+	local now = GetTime()
+	if now - appearOffline.at < 5 then return appearOffline.on end
+	appearOffline.at = now
+	local on = false
+	if BNGetInfo and C_BattleNet and C_BattleNet.GetAccountInfoByID then
+		local ok, _, _, account = pcall(BNGetInfo)
+		account = ok and Safe.Value(account)
+		local info = account and Safe.Call(C_BattleNet.GetAccountInfoByID, account)
+		if type(info) == "table" then
+			local game = type(info.gameAccountInfo) == "table" and info.gameAccountInfo or nil
+			on = Safe.Value(info.appearOffline) == true or (game and Safe.Value(game.isAppearOffline) == true) or false
+		end
+	end
+	appearOffline.on = on
+	return on
+end
+mod.AppearOffline = AppearOffline
+
 local outbox, order = {}, {}        -- key -> { text, channel, target, bn }; the keys in turn
 local sender = CreateFrame("Frame")
 sender:Hide()
@@ -237,6 +260,8 @@ sender:SetScript("OnUpdate", function(self, elapsed)
 	wait = SEND_GAP
 	-- (your place never leaves with Share where you are off, whatever was queued before it was turned off: #277)
 	if m.text:sub(1, 2) == "L1" and not mod.db.friendsShare then return end
+	-- (appearing offline: only the goodbye goes, so they stop showing where you were)
+	if AppearOffline() and m.text ~= "L0" then return end
 	if m.bn then
 		if BNSendGameData then pcall(BNSendGameData, m.bn, PREFIX, m.text) end
 	elseif C_ChatInfo and C_ChatInfo.SendAddonMessage then
@@ -288,7 +313,7 @@ local function Here()
 end
 
 local function Tick()
-	if not mod.db.friendsShare then
+	if not mod.db.friendsShare or AppearOffline() then
 		if sharing then sharing = false last.at, last.text = -math.huge, nil Broadcast("L0") end
 		return
 	end
