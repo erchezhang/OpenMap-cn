@@ -904,8 +904,12 @@ local function WarmSlot(list, i)
 	end
 	return t
 end
+-- (a frame with more regions than this isn't read: { f:GetRegions() } that long overflows Lua's stack, #414.
+-- The art's own frames have a few hundred; thousands are icons' hidden anchors, no files to hold)
+local WARM_REGIONS, EMPTY = 4000, {}
 local function WarmCollect(f, files, seen)
-	for _, r in ipairs({ f:GetRegions() }) do
+	local many = f.GetNumRegions and f:GetNumRegions() > WARM_REGIONS
+	for _, r in ipairs(many and EMPTY or { f:GetRegions() }) do
 		if #files >= WARM_MOST then return end
 		-- (a zone texture still fading in as the map closed is at alpha 0 but has its file: kept too,
 		-- or that part of the view came in late again at the next opening. omStep: Stitch's loader fade)
@@ -914,7 +918,7 @@ local function WarmCollect(f, files, seen)
 			if file and not seen[file] then seen[file] = true files[#files + 1] = file end
 		end
 	end
-	for _, c in ipairs({ f:GetChildren() }) do
+	for _, c in ipairs((f.GetNumChildren and f:GetNumChildren() > WARM_REGIONS) and EMPTY or { f:GetChildren() }) do
 		if #files >= WARM_MOST then return end
 		if c:IsShown() and (c:GetAlpha() or 0) > 0 then WarmCollect(c, files, seen) end
 	end
@@ -1243,7 +1247,14 @@ function mod:SetupExtras(worldMap)
 	map, sc = worldMap, worldMap.ScrollContainer
 	map:HookScript("OnShow", function() fader:SetShown((mod.db.moveFade or 0) > 0) ApplyFpsCap() end)
 	map:HookScript("OnHide", function() fader:Hide() faded = 1 SetFade(1) ApplyFpsCap() end)
-	map:HookScript("OnHide", function() WarmStop() mod.TimeClose("warm art held", WarmHold) end)
+	-- (and round you again: the view it closed on can be another place's, and the opening is centred on
+	-- you. Around.mapID cleared: a closing in the middle of the let-go left that set part held)
+	map:HookScript("OnHide", function()
+		WarmStop()
+		mod.TimeClose("warm art held", WarmHold)
+		Around.mapID = nil
+		C_Timer.After(0.5, mod.WarmAround)
+	end)
 	map:HookScript("OnShow", WarmLetGo)
 	-- (a new zone: its art warmed while the map is closed, a moment after arriving; a warming a fight
 	-- paused goes on once it's over)

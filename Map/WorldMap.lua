@@ -1652,11 +1652,13 @@ local function Setup()
 		if active then RaisePlayer() end
 	end)
 	dp.OnHide = function()
+		-- (the view noted first: closed in a fight, it's the own view's, which stopping it leaves behind; read
+		-- after, it was Blizzard's canvas's, the view from before the fight, and the map reopened there)
+		if mod.OnMapHidden then mod:OnMapHidden() end
 		if mod.OwnViewStop then mod.OwnViewStop(false) end
 		mod.instanceWorldBrowsing = nil
 		mod.instanceMapGeneration = (mod.instanceMapGeneration or 0) + 1
 		live = nil
-		if mod.OnMapHidden then mod:OnMapHidden() end
 		ticker:Hide()
 	end
 	local shown = Ours("map shown", function()
@@ -1686,7 +1688,8 @@ local function Setup()
 	Timed("Extras", mod.SetupExtras, mod, map)
 	Timed("Flights", mod.SetupFlights, mod)
 	-- map closed: the world-wide re-grade waits for the next opening
-	local exploredDirty, citiesDirty = false, false
+	-- (dirty from the start: the map is built at login, maybe before the game has sent what you explored)
+	local exploredDirty, citiesDirty = true, false
 	ns.RegisterEvent(mod, "MAP_EXPLORATION_UPDATED", function()
 		if not S.IsBuilt() then return end
 		if map:IsShown() then S.RefreshExplored() else exploredDirty = true end
@@ -1695,6 +1698,14 @@ local function Setup()
 	ns.RegisterEvent(mod, "ZONE_CHANGED_NEW_AREA", function()
 		if not S.IsBuilt() then return end
 		if map:IsShown() then S.RefreshCities() else citiesDirty = true end
+		exploredDirty = true
+	end)
+	-- (into a new subzone, where exploring happens: what's explored read again at the next opening, not only on
+	-- MAP_EXPLORATION_UPDATED, which a reveal can come without: places you'd found weren't shown, #410 #422)
+	local exploredOwner = {}
+	ns.RegisterEvent(exploredOwner, "ZONE_CHANGED", function()
+		if not S.IsBuilt() then return end
+		if map:IsShown() then S.RefreshExplored() else exploredDirty = true end
 	end)
 	map:HookScript("OnShow", function()
 		if not (exploredDirty or citiesDirty) then return end

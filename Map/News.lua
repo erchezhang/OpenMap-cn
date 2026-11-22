@@ -25,6 +25,7 @@ local GOLD = { 1, 0.82, 0 }
 local NON_LATIN = { koKR = true, zhCN = true, zhTW = true, ruRU = true }
 local TITLE_FONT = NON_LATIN[GetLocale and GetLocale() or ""] and STANDARD_TEXT_FONT or "Fonts\\MORPHEUS.TTF"
 local URL = "https://github.com/openmap-world/openmap"
+local SUPPORT_URL = "https://ko-fi.com/jigrobbulus"   -- (the credits' foot: where to support it)
 local MONTHS = { "January", "February", "March", "April", "May", "June", "July", "August", "September",
 	"October", "November", "December" }
 
@@ -150,6 +151,43 @@ local function ShowPage(n)
 		p.dot:Show()
 		p.text:Show()
 		y = y + (p.text:GetStringHeight() or 16) + 14
+	end
+	-- (the credits' foot, only there: that it's free, and where to support it, the link to copy)
+	local sup = page.support
+	if credits and not sup then
+		sup = {}
+		sup.text = Font(child:CreateFontString(nil, "OVERLAY"), STANDARD_TEXT_FONT, 15)
+		sup.text:SetJustifyH("LEFT")
+		sup.text:SetTextColor(INK[1], INK[2], INK[3])
+		sup.link = CreateFrame("EditBox", nil, child, "InputBoxTemplate")
+		sup.link:SetSize(240, 22)
+		sup.link:SetAutoFocus(false)
+		sup.link:SetText(SUPPORT_URL)
+		sup.link:SetCursorPosition(0)
+		sup.link:SetScript("OnTextChanged", function(self, user) if user then self:SetText(SUPPORT_URL) self:HighlightText() end end)
+		sup.link:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+		sup.link:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+		sup.copy = Look:Font(child:CreateFontString(nil, "OVERLAY"), 11)
+		sup.copy:SetPoint("LEFT", sup.link, "RIGHT", 10, 0)
+		sup.copy:SetTextColor(0.45, 0.35, 0.2)
+		sup.copy:SetText(L["click, then Ctrl-C"])
+		page.support = sup
+	end
+	if sup then
+		if credits then
+			y = y + 10
+			sup.text:ClearAllPoints()
+			sup.text:SetPoint("TOPLEFT", 6, -y)
+			sup.text:SetWidth(width - 12)
+			sup.text:SetText(L["OpenMap is free and made in spare time. To support it:"])
+			y = y + (sup.text:GetStringHeight() or 16) + 8
+			sup.link:ClearAllPoints()
+			sup.link:SetPoint("TOPLEFT", 12, -y)
+			y = y + 30
+		end
+		sup.text:SetShown(credits)
+		sup.link:SetShown(credits)
+		sup.copy:SetShown(credits)
 	end
 	child:SetHeight(y + 16)
 	page.scroll:SetVerticalScroll(0)

@@ -4,6 +4,18 @@
 local _, ns = ...
 
 ns.MapChangelog = {
+	{ version = "v0.8.13", date = "2026-11-22", heads = { [1] = "Fixed", [8] = "Improved", [10] = "Known issue", }, items = {
+		"|cff6e2c0aPlaces you've explored show on the map|r: the map read what you'd explored as it was built at login, maybe before the game had sent it, and then only when the game said something new was explored. It reads it again as the map first opens and after you enter a new subzone (#422, #410).",
+		"|cff6e2c0aNo lag zooming with Show places to explore on|r: every zone you'd looked at kept its outlines, thousands of lines laid out again on every frame of each zoom and pan, nine times the map's own. Only the zones in view and a few recent ones keep them now (#411, #413, #419).",
+		"|cff6e2c0aNo stack overflow as the map closes|r with Show places to explore on and Keep warm (#414).",
+		"|cff6e2c0aPlaces to explore count what you've already explored|r: it read the map's own record, which can be from before the game sent your exploring after login; it asks the game now, and again as you explore (#417, #418, the Barrens showed 3 of 25).",
+		"|cff6e2c0aThe map's art ready before it opens, in more cases|r (keep-warm round you, v0.8.12): the art round you is warmed again each time the map closes (closed on another place, the next opening, centred on you, came in cold); in a cave or another small map its zone is warmed (nothing was); and in a big zone its own art comes first, the farther tiles last (they filled the 400 files and left it out). By cscoder69.",
+		"|cff6e2c0aThe map closed in a fight reopens where you left it|r: it reopened on the view from before the fight.",
+		"|cff6e2c0aOpening the map after you've moved is lighter with Show places to explore on|r: only zones where you've explored something since are drawn again, not all of them.",
+		"|cff6e2c0aClose-up map performance|r: with minimap detail on and unexplored areas hidden, the map draws fewer masked fragments and skips the ones outside the view. By benjaminrobinet.",
+		"|cff6e2c0aSupporting OpenMap|r: the foot of What's new's Credits page has a link to copy, for those who'd like to.",
+		"Opening the map in a fight can print \"Interface action failed because of an AddOn\" once a session. It's harmless: the map, the quest log and the tracker all work; only the quest log's controller navigation marks are skipped for that one refresh.",
+	} },
 	{ version = "v0.8.12", date = "2026-11-21", heads = { [1] = "New", [2] = "Improved", [10] = "Fixed", }, items = {
 		"|cff6e2c0aShow places to explore|r (the map's menu and Options, off until turned on): for each zone's Explore achievement, the places you haven't explored yet, each with a soft gold outline of the ground that explores it (read from the game's own terrain) and a pin where to go; its tooltip names the place and the achievement's progress. Further out, each zone shows how many places it has left.",
 		"|cff6e2c0aThe map works in a fight|r: since v0.8.11 the map stood still in combat (the game's map can't be moved by an addon then without breaking the quest tracker, #345). In a fight OpenMap's map now moves onto frames of its own, over the game's, which is left as it is: zoom, drag, click and resize it as usual, with your arrow, your party and raid, your quests and their areas, the name of the place under the cursor, Questie's and other addons' map icons, and Ctrl-click's waypoint. As the fight ends it all goes back on the game's map, where you left it (#386, #389). (New files: restart the game after updating, a /reload isn't enough.)",
@@ -98,8 +110,5 @@ ns.MapChangelog = {
 		"|cff6e2c0aParty and raid markers stay steady|r: one marker per member, moving smoothly. OpenMap's ring now follows Blizzard's own dot where the game places a member, instead of a second dot of its own that lagged behind it; elsewhere OpenMap's dot keeps its highlight and tooltip as it moves. The ring is now a thin gold edge (the wide one round a dark gap read as a target: #158, #170). By puschie286.",
 		"|cff6e2c0aFriends on the map: your own faction only.|r Your place is only shared with, and shown from, players of your own faction: Battle.net friends on the other faction no longer see where you are, nor you them (a player's report: it let Horde and Alliance find each other for PvP).",
 		"|cff6e2c0aFriends in another realm group show on the map|r: a friend on CAMWOW US1 and one on US2 (or EU4 and EU5) never saw each other with \"Share where you are\" on (#164, #167).",
-	} },
-	{ version = "v0.8.7", date = "2026-11-12", heads = { [1] = "Fixed", }, items = {
-		"|cff6e2c0aQuestie's icons show on the first map you open|r: with Questie 12.8, a map opened on a zone showed none of Questie's icons (their tooltips still came up) until you'd zoomed out to the continent once: icons Questie placed before the map was first opened stayed under its art (#194, #193, #195).",
 	} },
 }

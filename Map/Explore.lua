@@ -37,15 +37,22 @@ local view                      -- the last view: { u, v, hu, hv, zoom }
 
 local function On() return mod.db and mod.db.explore and S.IsBuilt() end
 
--- whether a piece is still unexplored: the map's own state, else the game's (a zone not placed yet)
+-- whether a piece is still unexplored: the game's own list of what's explored, asked each time a zone's
+-- outlines or counts are made. (Not the map's pieces, S.Pieces: they're set as the map is built, at login,
+-- before the game may have sent what you've explored, and only flipped by a later exploring: a zone you'd
+-- long explored stayed unexplored here, 3/25 for the Barrens, #417 #418)
+local exploredNow = {}          -- mapID -> { key = true }, for the making in hand (Fresh empties it)
+local function Fresh() wipe(exploredNow) end
 local function Unexplored(mapID, key)
-	local list = S.Pieces and S.Pieces(mapID)
-	local piece = list and list[key]
-	if piece then return piece.unexplored and true or false end
-	for _, info in ipairs(C_MapExplorationInfo.GetExploredMapTextures(mapID) or {}) do
-		if info.textureWidth .. ":" .. info.textureHeight .. ":" .. info.offsetX .. ":" .. info.offsetY == key then return false end
+	local now = exploredNow[mapID]
+	if not now then
+		now = {}
+		for _, info in ipairs(C_MapExplorationInfo.GetExploredMapTextures(mapID) or {}) do
+			now[info.textureWidth .. ":" .. info.textureHeight .. ":" .. info.offsetX .. ":" .. info.offsetY] = true
+		end
+		exploredNow[mapID] = now
 	end
-	return true
+	return not now[key]
 end
 
 -- a zone's explored pieces and its whole count
@@ -99,6 +106,7 @@ end
 -- a zone's outlines and pins, for the pieces it has still to explore
 local function BuildZone(mapID, z)
 	z.dirty = false
+	exploredNow[mapID] = nil
 	local set = z.set or S.PinSet("explore" .. mapID, ZONE_FROM, 2)
 	z.set = set
 	S.ClearPinSet(set)
@@ -148,33 +156,74 @@ local function BuildCounts()
 	end
 end
 
--- the zones in view at the zoom they show from: made (when new or explored since) and shown; the rest off
+-- the zones in view at the zoom they show from: made (when new or explored since) and shown; the rest off.
+-- Out of view, a zone's outlines are kept only up to KEEP_LINES in all, the longest out of view let go first
+-- (made again when it's back): every one kept, each zone toured had its lines laid out again on every frame of
+-- each zoom and pan (thousands: #411 #413 #419), and their anchors on the art's frame overflowed the stack
+-- when its regions were read (#414). Kept a while, a zoom in and back out doesn't make them all again
+local KEEP_LINES = 1500
+local tick = 0
+local function Let(z)
+	S.ClearPinSet(z.set)
+	z.dirty = true
+end
 local function Update()
 	if not view then return end
 	local u, v, hu, hv, zoom = view[1], view[2], view[3], view[4], view[5]
 	local near = (zoom or 0) >= ZONE_FROM * 0.8
+	tick = tick + 1
+	local kept, oldest = 0, {}
 	for mapID, z in pairs(zones) do
 		local l, r, t, b = S.Rect(mapID)
 		local here = near and l and r > u - hu and l < u + hu and b > v - hv and t < v + hv or false
 		if here and z.dirty then BuildZone(mapID, z) end
 		if z.set and z.set.on ~= here then S.SetPinSetOn(z.set, here) end
+		if here then z.seen = tick end
+		if z.set and not z.dirty then
+			kept = kept + #z.set.lines
+			if not here then oldest[#oldest + 1] = z end
+		end
+	end
+	if kept <= KEEP_LINES then return end
+	table.sort(oldest, function(a, b) return (a.seen or 0) < (b.seen or 0) end)
+	for _, z in ipairs(oldest) do
+		if kept <= KEEP_LINES then break end
+		kept = kept - #z.set.lines
+		Let(z)
 	end
 end
 
 -- everything off (the option off)
 local function Off()
 	for _, z in pairs(zones) do
-		if z.set and z.set.on then S.SetPinSetOn(z.set, false) end
+		if z.set then
+			if z.set.on then S.SetPinSetOn(z.set, false) end
+			if not z.dirty then Let(z) end
+		end
 	end
 	if counts and counts.on then S.SetPinSetOn(counts, false) end
 end
 
 -- the option, or what's explored, changed: made again as each zone comes into view
+-- (only the zones where something's explored since are made again, and the counts only then: all of them made
+-- again each time, a map opening after a new subzone did thousands of calls, a hitch)
 function mod.RefreshExplore()
 	if not On() then Off() return end
-	for _, z in pairs(zones) do z.dirty = true end
-	BuildCounts()
-	S.SetPinSetOn(counts, true)
+	Fresh()
+	local changed = not counts or not counts.on
+	for mapID, z in pairs(zones) do
+		local done = Progress(mapID)
+		if z.done ~= done then
+			z.done = done
+			changed = true
+			if z.set and not z.dirty then Let(z) end
+			z.dirty = true
+		end
+	end
+	if changed then
+		BuildCounts()
+		S.SetPinSetOn(counts, true)
+	end
 	Update()
 end
 
@@ -188,3 +237,20 @@ end)
 tinsert(S.exploredHooks, function()
 	if mod.db and mod.db.explore then mod.RefreshExplore() end
 end)
+
+-- the game says something was explored (or sent what you'd explored, after login): made again, at once with
+-- the map open, else as it next opens; and at the first opening of a session, what it holds by then. (Into a new
+-- subzone too: a place explored can come without that event, #422)
+local owner, pending = {}, true
+local function Explored()
+	if WorldMapFrame and WorldMapFrame:IsShown() and mod.db and mod.db.explore then mod.RefreshExplore() else pending = true end
+end
+ns.RegisterEvent(owner, "MAP_EXPLORATION_UPDATED", Explored)
+ns.RegisterEvent(owner, "ZONE_CHANGED", Explored)
+if WorldMapFrame then
+	WorldMapFrame:HookScript("OnShow", function()
+		if not pending or not (mod.db and mod.db.explore) then return end
+		pending = false
+		C_Timer.After(0, function() if On() then mod.RefreshExplore() end end)
+	end)
+end
